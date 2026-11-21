@@ -1,6 +1,5 @@
 """Routes d'authentification : ouvrir et fermer une session."""
 
-import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -9,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
+from app.auth import SESSION_COOKIE_NAME, hash_token
+from app.auth.dependencies import get_current_user
 from app.db import get_db
 from app.models import Session, User
 from app.schemas.auth import LoginRequest, UserRead
@@ -16,7 +17,6 @@ from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
-SESSION_COOKIE_NAME = "ndf_session"
 SESSION_TTL = timedelta(days=7)
 
 # Hash Argon2 factice, vérifié quand l'e-mail est inconnu, afin que le temps de
@@ -24,11 +24,6 @@ SESSION_TTL = timedelta(days=7)
 _DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
 
 DbSession = Annotated[OrmSession, Depends(get_db)]
-
-
-def _hash_token(token: str) -> str:
-    """Hache un jeton de session en SHA-256 hexadécimal (jamais stocké en clair)."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _utcnow() -> datetime:
@@ -60,7 +55,7 @@ def login(
     db.add(
         Session(
             user_id=user.id,
-            token_hash=_hash_token(token),
+            token_hash=hash_token(token),
             created_at=now,
             expires_at=now + SESSION_TTL,
         )
@@ -84,7 +79,7 @@ def logout(request: Request, db: DbSession) -> Response:
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
         session = db.execute(
-            select(Session).where(Session.token_hash == _hash_token(token))
+            select(Session).where(Session.token_hash == hash_token(token))
         ).scalar_one_or_none()
         if session is not None:
             db.delete(session)
@@ -99,3 +94,9 @@ def logout(request: Request, db: DbSession) -> Response:
         samesite="strict",
     )
     return response
+
+
+@router.get("/me", response_model=UserRead)
+def me(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """Renvoie l'utilisateur connecté (sans hash ni jeton)."""
+    return current_user
