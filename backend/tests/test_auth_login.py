@@ -197,6 +197,89 @@ def test_login_email_majuscules_et_espaces_normalise(client, db_session):
     assert _count_sessions(db_session) == 1
 
 
+# --- Purge des sessions expirées à la connexion -------------------------------
+
+
+def test_login_purge_sessions_expirees_y_compris_autres_utilisateurs(client, db_session):
+    jean = _create_user(db_session, email="jean@example.com")
+    marie = _create_user(db_session, email="marie@example.com")
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            UserSession(
+                user_id=jean.id,
+                token_hash=_hash_token("expire-jean"),
+                created_at=now - timedelta(days=8),
+                expires_at=now - timedelta(days=1),
+            ),
+            UserSession(
+                user_id=marie.id,
+                token_hash=_hash_token("expire-marie"),
+                created_at=now - timedelta(days=8),
+                expires_at=now - timedelta(hours=1),
+            ),
+        ]
+    )
+    db_session.commit()
+    assert _count_sessions(db_session) == 2
+
+    response = _login(client, "jean@example.com", PASSWORD)
+
+    assert response.status_code == 200
+    # Seule la nouvelle session de Jean subsiste : les expirées (dont celle de
+    # Marie) ont été purgées dans la même transaction.
+    rows = db_session.execute(sa.select(UserSession)).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].user_id == jean.id
+
+
+def test_login_conserve_sessions_non_expirees_des_autres(client, db_session):
+    jean = _create_user(db_session, email="jean@example.com")
+    marie = _create_user(db_session, email="marie@example.com")
+    now = datetime.now(UTC)
+    db_session.add(
+        UserSession(
+            user_id=marie.id,
+            token_hash=_hash_token("valide-marie"),
+            created_at=now,
+            expires_at=now + timedelta(days=7),
+        )
+    )
+    db_session.commit()
+    assert _count_sessions(db_session) == 1
+
+    response = _login(client, "jean@example.com", PASSWORD)
+
+    assert response.status_code == 200
+    # La session valide de Marie est conservée, plus la nouvelle de Jean.
+    rows = db_session.execute(sa.select(UserSession)).scalars().all()
+    assert len(rows) == 2
+    assert sorted(r.user_id for r in rows) == sorted([jean.id, marie.id])
+
+
+def test_login_refuse_ne_purge_pas_sessions_expirees(client, db_session):
+    jean = _create_user(db_session, email="jean@example.com")
+    now = datetime.now(UTC)
+    db_session.add(
+        UserSession(
+            user_id=jean.id,
+            token_hash=_hash_token("expire"),
+            created_at=now - timedelta(days=8),
+            expires_at=now - timedelta(days=1),
+        )
+    )
+    db_session.commit()
+    assert _count_sessions(db_session) == 1
+
+    response = _login(client, "inconnu@example.com", PASSWORD)
+
+    assert response.status_code == 401
+    # Aucune purge sur refus : la session expirée est toujours là.
+    assert _count_sessions(db_session) == 1
+    remaining = db_session.execute(sa.select(UserSession)).scalar_one()
+    assert remaining.token_hash == _hash_token("expire")
+
+
 # --- Corps invalide -----------------------------------------------------------
 
 

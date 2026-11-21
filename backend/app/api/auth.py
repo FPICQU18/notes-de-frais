@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as OrmSession
 
 from app.auth import SESSION_COOKIE_NAME, hash_token
@@ -52,6 +52,9 @@ def login(
 
     token = secrets.token_urlsafe(32)
     now = _utcnow()
+    # Purge des sessions expirées (tous utilisateurs) dans la même transaction
+    # que la création de la nouvelle session, afin de ne pas accumuler les jetons.
+    db.execute(delete(UserSession).where(UserSession.expires_at <= now))
     db.add(
         UserSession(
             user_id=user.id,
