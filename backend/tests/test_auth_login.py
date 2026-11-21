@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session as OrmSession
 from app.api import auth
 from app.db import get_db
 from app.main import app
-from app.models import Session, User
+from app.models import User, UserSession
 from app.security import hash_password
 
 PASSWORD = "mot-de-passe-secret"
@@ -56,7 +56,7 @@ def _create_user(
 
 
 def _count_sessions(db_session: OrmSession) -> int:
-    return db_session.execute(sa.select(sa.func.count()).select_from(Session)).scalar_one()
+    return db_session.execute(sa.select(sa.func.count()).select_from(UserSession)).scalar_one()
 
 
 def _hash_token(token: str) -> str:
@@ -124,7 +124,7 @@ def test_login_succes_cree_une_seule_session_hachee(client, db_session):
     token = _cookie_value(response)
     assert token is not None
 
-    rows = db_session.execute(sa.select(Session)).scalars().all()
+    rows = db_session.execute(sa.select(UserSession)).scalars().all()
     assert len(rows) == 1
     session = rows[0]
     assert session.token_hash == _hash_token(token)
@@ -292,13 +292,13 @@ def test_logout_session_expiree_204_sans_toucher_aux_autres(client, db_session):
     token_valide = "jeton-valide"
     db_session.add_all(
         [
-            Session(
+            UserSession(
                 user_id=user.id,
                 token_hash=_hash_token(token_expire),
                 created_at=now - timedelta(days=8),
                 expires_at=now - timedelta(days=1),
             ),
-            Session(
+            UserSession(
                 user_id=user.id,
                 token_hash=_hash_token(token_valide),
                 created_at=now,
@@ -314,7 +314,7 @@ def test_logout_session_expiree_204_sans_toucher_aux_autres(client, db_session):
     assert response.status_code == 204
     assert _cookie_value(response) == ""
     # Seule la session ciblée est supprimée ; l'autre reste valide.
-    remaining = db_session.execute(sa.select(Session)).scalars().all()
+    remaining = db_session.execute(sa.select(UserSession)).scalars().all()
     assert len(remaining) == 1
     assert remaining[0].token_hash == _hash_token(token_valide)
 
@@ -334,5 +334,5 @@ def test_logout_une_session_l_autre_reste_valide(client, db_session):
 
     assert response.status_code == 204
     assert _count_sessions(db_session) == 1
-    remaining = db_session.execute(sa.select(Session)).scalar_one()
+    remaining = db_session.execute(sa.select(UserSession)).scalar_one()
     assert remaining.token_hash == _hash_token(token2)
