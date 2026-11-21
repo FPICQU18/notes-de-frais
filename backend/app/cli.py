@@ -44,7 +44,7 @@ def create_admin() -> int:
 
     with SessionLocal() as session:
         existing = session.execute(
-            sa.select(User.id).where(User.email == email)
+            sa.select(User.id).where(sa.func.lower(User.email) == email.lower())
         ).scalar_one_or_none()
         if existing is not None:
             return _fail(f"un compte existe déjà avec l'e-mail « {email} ».")
