@@ -5,13 +5,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as OrmSession
 
 from app.auth import SESSION_COOKIE_NAME, hash_token
 from app.auth.dependencies import get_current_user
 from app.db import get_db
-from app.models import Session, User
+from app.models import User, UserSession
 from app.schemas.auth import LoginRequest, UserRead
 from app.security import hash_password, verify_password
 
@@ -52,8 +52,11 @@ def login(
 
     token = secrets.token_urlsafe(32)
     now = _utcnow()
+    # Purge des sessions expirées (tous utilisateurs) dans la même transaction
+    # que la création de la nouvelle session, afin de ne pas accumuler les jetons.
+    db.execute(delete(UserSession).where(UserSession.expires_at <= now))
     db.add(
-        Session(
+        UserSession(
             user_id=user.id,
             token_hash=hash_token(token),
             created_at=now,
@@ -79,7 +82,7 @@ def logout(request: Request, db: DbSession) -> Response:
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if token:
         session = db.execute(
-            select(Session).where(Session.token_hash == hash_token(token))
+            select(UserSession).where(UserSession.token_hash == hash_token(token))
         ).scalar_one_or_none()
         if session is not None:
             db.delete(session)

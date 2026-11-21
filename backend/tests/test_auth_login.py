@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session as OrmSession
 from app.api import auth
 from app.db import get_db
 from app.main import app
-from app.models import Session, User
+from app.models import User, UserSession
 from app.security import hash_password
 
 PASSWORD = "mot-de-passe-secret"
@@ -56,7 +56,7 @@ def _create_user(
 
 
 def _count_sessions(db_session: OrmSession) -> int:
-    return db_session.execute(sa.select(sa.func.count()).select_from(Session)).scalar_one()
+    return db_session.execute(sa.select(sa.func.count()).select_from(UserSession)).scalar_one()
 
 
 def _hash_token(token: str) -> str:
@@ -124,7 +124,7 @@ def test_login_succes_cree_une_seule_session_hachee(client, db_session):
     token = _cookie_value(response)
     assert token is not None
 
-    rows = db_session.execute(sa.select(Session)).scalars().all()
+    rows = db_session.execute(sa.select(UserSession)).scalars().all()
     assert len(rows) == 1
     session = rows[0]
     assert session.token_hash == _hash_token(token)
@@ -195,6 +195,89 @@ def test_login_email_majuscules_et_espaces_normalise(client, db_session):
     assert response.status_code == 200
     assert response.json()["email"] == "jean@example.com"
     assert _count_sessions(db_session) == 1
+
+
+# --- Purge des sessions expirées à la connexion -------------------------------
+
+
+def test_login_purge_sessions_expirees_y_compris_autres_utilisateurs(client, db_session):
+    jean = _create_user(db_session, email="jean@example.com")
+    marie = _create_user(db_session, email="marie@example.com")
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            UserSession(
+                user_id=jean.id,
+                token_hash=_hash_token("expire-jean"),
+                created_at=now - timedelta(days=8),
+                expires_at=now - timedelta(days=1),
+            ),
+            UserSession(
+                user_id=marie.id,
+                token_hash=_hash_token("expire-marie"),
+                created_at=now - timedelta(days=8),
+                expires_at=now - timedelta(hours=1),
+            ),
+        ]
+    )
+    db_session.commit()
+    assert _count_sessions(db_session) == 2
+
+    response = _login(client, "jean@example.com", PASSWORD)
+
+    assert response.status_code == 200
+    # Seule la nouvelle session de Jean subsiste : les expirées (dont celle de
+    # Marie) ont été purgées dans la même transaction.
+    rows = db_session.execute(sa.select(UserSession)).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].user_id == jean.id
+
+
+def test_login_conserve_sessions_non_expirees_des_autres(client, db_session):
+    jean = _create_user(db_session, email="jean@example.com")
+    marie = _create_user(db_session, email="marie@example.com")
+    now = datetime.now(UTC)
+    db_session.add(
+        UserSession(
+            user_id=marie.id,
+            token_hash=_hash_token("valide-marie"),
+            created_at=now,
+            expires_at=now + timedelta(days=7),
+        )
+    )
+    db_session.commit()
+    assert _count_sessions(db_session) == 1
+
+    response = _login(client, "jean@example.com", PASSWORD)
+
+    assert response.status_code == 200
+    # La session valide de Marie est conservée, plus la nouvelle de Jean.
+    rows = db_session.execute(sa.select(UserSession)).scalars().all()
+    assert len(rows) == 2
+    assert sorted(r.user_id for r in rows) == sorted([jean.id, marie.id])
+
+
+def test_login_refuse_ne_purge_pas_sessions_expirees(client, db_session):
+    jean = _create_user(db_session, email="jean@example.com")
+    now = datetime.now(UTC)
+    db_session.add(
+        UserSession(
+            user_id=jean.id,
+            token_hash=_hash_token("expire"),
+            created_at=now - timedelta(days=8),
+            expires_at=now - timedelta(days=1),
+        )
+    )
+    db_session.commit()
+    assert _count_sessions(db_session) == 1
+
+    response = _login(client, "inconnu@example.com", PASSWORD)
+
+    assert response.status_code == 401
+    # Aucune purge sur refus : la session expirée est toujours là.
+    assert _count_sessions(db_session) == 1
+    remaining = db_session.execute(sa.select(UserSession)).scalar_one()
+    assert remaining.token_hash == _hash_token("expire")
 
 
 # --- Corps invalide -----------------------------------------------------------
@@ -292,13 +375,13 @@ def test_logout_session_expiree_204_sans_toucher_aux_autres(client, db_session):
     token_valide = "jeton-valide"
     db_session.add_all(
         [
-            Session(
+            UserSession(
                 user_id=user.id,
                 token_hash=_hash_token(token_expire),
                 created_at=now - timedelta(days=8),
                 expires_at=now - timedelta(days=1),
             ),
-            Session(
+            UserSession(
                 user_id=user.id,
                 token_hash=_hash_token(token_valide),
                 created_at=now,
@@ -314,7 +397,7 @@ def test_logout_session_expiree_204_sans_toucher_aux_autres(client, db_session):
     assert response.status_code == 204
     assert _cookie_value(response) == ""
     # Seule la session ciblée est supprimée ; l'autre reste valide.
-    remaining = db_session.execute(sa.select(Session)).scalars().all()
+    remaining = db_session.execute(sa.select(UserSession)).scalars().all()
     assert len(remaining) == 1
     assert remaining[0].token_hash == _hash_token(token_valide)
 
@@ -334,5 +417,5 @@ def test_logout_une_session_l_autre_reste_valide(client, db_session):
 
     assert response.status_code == 204
     assert _count_sessions(db_session) == 1
-    remaining = db_session.execute(sa.select(Session)).scalar_one()
+    remaining = db_session.execute(sa.select(UserSession)).scalar_one()
     assert remaining.token_hash == _hash_token(token2)

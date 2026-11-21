@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.db import get_db
 from app.main import app
-from app.models import Session, User
+from app.models import User, UserSession
 from app.security import hash_password
 
 PASSWORD = "mot-de-passe-secret"
@@ -61,9 +61,9 @@ def _create_session(
     *,
     token: str,
     expires_at: datetime | None = None,
-) -> Session:
+) -> UserSession:
     now = datetime.now(UTC)
-    session = Session(
+    session = UserSession(
         user_id=user.id,
         token_hash=_hash_token(token),
         created_at=now,
@@ -76,7 +76,7 @@ def _create_session(
 
 
 def _count_sessions(db_session: OrmSession) -> int:
-    return db_session.execute(sa.select(sa.func.count()).select_from(Session)).scalar_one()
+    return db_session.execute(sa.select(sa.func.count()).select_from(UserSession)).scalar_one()
 
 
 def _login(client: TestClient, email: str, password: str):

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.auth import SESSION_COOKIE_NAME, hash_token
 from app.db import get_db
-from app.models import Session, User
+from app.models import User, UserSession
 
 DbSession = Annotated[OrmSession, Depends(get_db)]
 
@@ -41,7 +41,7 @@ def get_current_user(request: Request, db: DbSession) -> User:
         )
 
     session = db.execute(
-        select(Session).where(Session.token_hash == hash_token(token))
+        select(UserSession).where(UserSession.token_hash == hash_token(token))
     ).scalar_one_or_none()
     if session is None:
         raise HTTPException(
