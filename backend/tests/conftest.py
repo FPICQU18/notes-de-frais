@@ -64,7 +64,10 @@ def _postgres_reachable() -> bool:
             connect_timeout=3,
         ):
             return True
-    except psycopg.OperationalError:
+    except psycopg.Error:
+        # OperationalError (serveur absent), AuthenticationError (mauvais mot de
+        # passe, ex. masque « *** » de la valeur par défaut) : dans les deux cas
+        # aucun test de base de données ne peut tourner localement.
         return False
 
 
