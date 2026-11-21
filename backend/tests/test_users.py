@@ -218,6 +218,56 @@ def test_create_user_mot_de_passe_court_422(client, db_session):
     assert _count_users(db_session) == 1
 
 
+def test_create_user_mot_de_passe_court_ne_fuit_pas_le_mot_de_passe(client, db_session):
+    """422 sur mot de passe court sans jamais renvoyer la valeur soumise ni input/ctx."""
+    _connect_as_admin(client, db_session)
+    password = "court"  # < 12 caractères
+
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "marie@example.com",
+            "display_name": "Marie Curie",
+            "role": "utilisateur",
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 422
+    # La valeur soumise ne doit jamais apparaître dans la réponse d'erreur.
+    assert password not in response.text
+    body = response.json()
+    for error in body["detail"]:
+        assert "input" not in error
+        assert "ctx" not in error
+    # Message entièrement en français, sans le préfixe anglais « Value error, ».
+    assert any(
+        error.get("msg") == "Le mot de passe doit contenir au moins 12 caractères."
+        for error in body["detail"]
+    )
+    assert _count_users(db_session) == 1
+
+
+def test_create_user_email_invalide_et_mot_de_passe_court_ne_fuit_pas(client, db_session):
+    """E-mail invalide + mot de passe court : 422 et aucune valeur soumise ne fuit."""
+    _connect_as_admin(client, db_session)
+    password = "court123"  # < 12 caractères
+
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "sans-arobase",
+            "display_name": "X",
+            "role": "utilisateur",
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 422
+    assert password not in response.text
+    assert _count_users(db_session) == 1
+
+
 @pytest.mark.parametrize("role", ["superadmin", "valideur-x", ""])
 def test_create_user_role_invalide_422(client, db_session, role):
     _connect_as_admin(client, db_session)
