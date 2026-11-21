@@ -1,14 +1,23 @@
 """Préparation commune de la base de données de test (Postgres requis).
 
 Tous les tests qui touchent à la base de données utilisent la fixture `db_session`.
-Si `DATABASE_URL` pointe vers un Postgres injoignable (ex. poste de travail sans
-Postgres local), ces tests sont sautés (`pytest.skip`) plutôt qu'en échec : la CI
-fournit toujours un Postgres et les y fait tourner.
+
+Comportement au démarrage de la session :
+- serveur Postgres joignable → la base `ndf_test` est créée si absente, les tests
+  s'exécutent ;
+- serveur joignable mais identifiants refusés → la session échoue (`pytest.fail`) ;
+- serveur injoignable → la session échoue si `CI` est défini (la CI ne doit jamais
+  passer avec des tests sautés), sinon elle est sautée avec un message indiquant
+  comment fournir `DATABASE_URL`.
+
+Le mot de passe n'apparaît jamais dans les messages : on affiche une URL masquée.
 """
 
+import os
 from collections.abc import Iterator
 
 import psycopg
+import psycopg.errors
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import create_engine
@@ -19,65 +28,90 @@ from app.config import get_settings
 from app.models import Base
 
 TEST_DATABASE_NAME = "ndf_test"
+POSTGRES_DATABASE_NAME = "postgres"
+
+# Identifiants refusés par le serveur (classe SQLSTATE 28) : jamais un skip.
+_AUTHENTICATION_ERRORS = (
+    psycopg.errors.InvalidPassword,
+    psycopg.errors.InvalidAuthorizationSpecification,
+)
 
 
-def _test_database_url() -> str:
-    """URL de la base de test, dérivée de DATABASE_URL (…/ndf → …/ndf_test)."""
-    url = make_url(get_settings().database_url)
-    return str(url.set(database=TEST_DATABASE_NAME))
+def _database_url(database: str) -> str:
+    """URL vers `database`, dérivée de `DATABASE_URL`, avec le vrai mot de passe.
+
+    `str(URL)` masque le mot de passe : on passe par
+    `render_as_string(hide_password=False)` pour que la connexion utilise le vrai
+    mot de passe.
+    """
+    url = make_url(get_settings().database_url).set(database=database)
+    return url.render_as_string(hide_password=False)
 
 
-TEST_DATABASE_URL = _test_database_url()
+TEST_DATABASE_URL = _database_url(TEST_DATABASE_NAME)
 
 
-def _ensure_test_database() -> None:
-    """Crée la base ndf_test si elle n'existe pas (la CI ne fournit que « ndf »)."""
+def _masked_database_url() -> str:
+    """URL de la base de test, mot de passe masqué, pour les messages."""
+    return str(make_url(TEST_DATABASE_URL))
+
+
+def _admin_connection(**kwargs):
+    """Connexion à la base `postgres` (toujours présente), jamais à la base de test."""
     url = make_url(TEST_DATABASE_URL)
-    if url.get_backend_name() != "postgresql":
-        raise RuntimeError(f"base de test non PostgreSQL inattendue : {TEST_DATABASE_URL}")
-    admin_url = url.set(database="postgres")
-    with psycopg.connect(
+    return psycopg.connect(
         host=url.host,
         port=url.port or 5432,
         user=url.username,
         password=url.password,
-        dbname=admin_url.database,
-        autocommit=True,
-    ) as conn:
+        dbname=POSTGRES_DATABASE_NAME,
+        **kwargs,
+    )
+
+
+def _probe_postgres() -> None:
+    """Vérifie la joignabilité du serveur sur la base `postgres`.
+
+    Lève une erreur de la classe `_AUTHENTICATION_ERRORS` si le serveur répond mais
+    refuse les identifiants, `psycopg.OperationalError` s'il est injoignable.
+    """
+    with _admin_connection(connect_timeout=3):
+        pass
+
+
+def _ensure_test_database() -> None:
+    """Crée la base `ndf_test` si elle n'existe pas (la CI ne fournit que « ndf »)."""
+    url = make_url(TEST_DATABASE_URL)
+    if url.get_backend_name() != "postgresql":
+        raise RuntimeError(f"base de test non PostgreSQL inattendue : {_masked_database_url()}")
+    with _admin_connection(autocommit=True) as conn:
         exists = conn.execute(
             "SELECT 1 FROM pg_database WHERE datname = %s", (TEST_DATABASE_NAME,)
         ).fetchone()
         if not exists:
-            conn.execute(f"CREATE DATABASE {TEST_DATABASE_NAME}")
-
-
-def _postgres_reachable() -> bool:
-    """True si le serveur Postgres de DATABASE_URL répond."""
-    url = make_url(TEST_DATABASE_URL)
-    try:
-        with psycopg.connect(
-            host=url.host,
-            port=url.port or 5432,
-            user=url.username,
-            password=url.password,
-            dbname=url.database,
-            connect_timeout=3,
-        ):
-            return True
-    except psycopg.Error:
-        # OperationalError (serveur absent), AuthenticationError (mauvais mot de
-        # passe, ex. masque « *** » de la valeur par défaut) : dans les deux cas
-        # aucun test de base de données ne peut tourner localement.
-        return False
+            conn.execute(f'CREATE DATABASE "{TEST_DATABASE_NAME}"')
 
 
 @pytest.fixture(scope="session")
 def test_engine():
-    """Moteur vers la base de test ; saute toute la session si Postgres est injoignable."""
-    if not _postgres_reachable():
+    """Moteur vers la base de test ; échoue ou saute selon la joignabilité de Postgres."""
+    try:
+        _probe_postgres()
+    except _AUTHENTICATION_ERRORS:
+        pytest.fail(
+            "Postgres joignable mais identifiants refusés "
+            f"({_masked_database_url()}) : vérifier DATABASE_URL."
+        )
+    except psycopg.OperationalError:
+        if os.environ.get("CI"):
+            pytest.fail(
+                "Postgres injoignable en CI : les tests de base de données ne doivent "
+                "jamais être sautés."
+            )
         pytest.skip(
-            f"Postgres injoignable ({TEST_DATABASE_URL}) : "
-            "les tests de base de données sont sautés (validés par la CI)."
+            f"Postgres injoignable ({_masked_database_url()}) : les tests de base de "
+            "données sont sautés. Définir DATABASE_URL vers un Postgres joignable pour "
+            "les exécuter."
         )
     _ensure_test_database()
     engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
