@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import health
+from app.api import auth, health
 
 app = FastAPI(
     title="Notes de frais",
@@ -10,3 +10,4 @@ app = FastAPI(
 )
 
 app.include_router(health.router, prefix="/api")
+app.include_router(auth.router)
