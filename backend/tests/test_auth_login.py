@@ -261,10 +261,14 @@ def test_logout_sans_cookie_204_idempotent(client, db_session):
     assert _login(client, "jean@example.com", PASSWORD).status_code == 200
     assert _count_sessions(db_session) == 1
 
-    response = client.post("/api/v1/auth/logout", cookies={})
+    # On retire le cookie du jar pour simuler une requête réellement sans cookie
+    # (sinon le jar envoie le cookie de session issu du login ci-dessus).
+    client.cookies.clear()
+    response = client.post("/api/v1/auth/logout")
 
     assert response.status_code == 204
     assert _cookie_value(response) == ""
+    assert _count_sessions(db_session) == 1
 
 
 def test_logout_cookie_inconnu_204_sans_erreur(client, db_session):
@@ -272,6 +276,7 @@ def test_logout_cookie_inconnu_204_sans_erreur(client, db_session):
     assert _login(client, "jean@example.com", PASSWORD).status_code == 200
     assert _count_sessions(db_session) == 1
 
+    client.cookies.clear()
     response = client.post("/api/v1/auth/logout", cookies={COOKIE_NAME: "jeton-inconnu"})
 
     assert response.status_code == 204
@@ -324,6 +329,7 @@ def test_logout_une_session_l_autre_reste_valide(client, db_session):
     assert token1 != token2
     assert _count_sessions(db_session) == 2
 
+    client.cookies.clear()
     response = client.post("/api/v1/auth/logout", cookies={COOKIE_NAME: token1})
 
     assert response.status_code == 204
