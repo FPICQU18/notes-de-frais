@@ -20,10 +20,13 @@ TEST_DATABASE_URL = DATABASE_URL.rsplit("/", 1)[0] + "/ndf_test"
 if TEST_DATABASE_URL.startswith("postgresql"):
     # La CI ne fournit que la base "ndf" : on crée la base de test au besoin.
     import psycopg
+    from sqlalchemy.engine import make_url
 
-    admin_url = TEST_DATABASE_URL.rsplit("/", 1)[0] + "/postgres"
-    with psycopg.connect(admin_url, autocommit=True) as conn:
-        exists = conn.execute("SELECT 1 FROM pg_database WHERE datname = 'ndf_test'").fetchone()
+    admin_url = make_url(TEST_DATABASE_URL).set(database="postgres")
+    with psycopg.connect(admin_url.render_as_string(hide_password=False), autocommit=True) as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM pg_database WHERE datname = %s", ("ndf_test",)
+        ).fetchone()
         if not exists:
             conn.execute("CREATE DATABASE ndf_test")
 
