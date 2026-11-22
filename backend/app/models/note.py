@@ -1,10 +1,10 @@
 """Modèle de note de frais : un dossier qui regroupe une ou plusieurs dépenses.
 
 C'est le dossier (et non la dépense) qui porte le statut et le circuit de
-validation. Un dossier naît toujours au statut `brouillon` ; cette US ne crée
-aucune transition : le statut reste `brouillon` en pratique, mais les cinq
-statuts d'AGENTS.md sont acceptés par la contrainte `CHECK` pour que les tests
-puissent positionner un statut avancé directement en base.
+validation. Un dossier naît au statut `brouillon` ; les cinq statuts d'AGENTS.md
+sont acceptés par la contrainte `CHECK`. `soumise_at` porte la date de dernière
+soumission (renseignée à chaque passage `brouillon` → `soumise`), et l'historique
+des transitions vit dans `app.models.note_transition.NoteTransition`.
 """
 
 from datetime import datetime
@@ -30,6 +30,7 @@ class Note(Base):
     )
     libelle: Mapped[str] = mapped_column(String(200), nullable=False)
     statut: Mapped[str] = mapped_column(String(20), nullable=False, server_default="brouillon")
+    soumise_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
