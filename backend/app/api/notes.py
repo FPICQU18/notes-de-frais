@@ -8,6 +8,7 @@ d'existence). Les totaux (`total_centimes`, `nb_depenses`) sont calculés par le
 serveur en une requête agrégée, jamais par le client.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 import sqlalchemy as sa
@@ -188,6 +189,7 @@ def add_depense(note_id: int, depense_id: int, db: DbSession, current_user: Curr
     if depense.note_id is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_DEPENSE_DEJA_RATTACHEE)
     depense.note_id = note.id
+    note.updated_at = datetime.now(UTC)
     db.commit()
     return None
 
@@ -201,5 +203,6 @@ def remove_depense(note_id: int, depense_id: int, db: DbSession, current_user: C
     if depense.note_id != note.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_DEPENSE_NON_RATTACHEE)
     depense.note_id = None
+    note.updated_at = datetime.now(UTC)
     db.commit()
     return None

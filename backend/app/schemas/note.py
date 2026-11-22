@@ -12,6 +12,18 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from app.schemas.depense import DepenseRead
 
 _MAX_LIBELLE = 200
+_MAX_MOTIF = 1000
+
+
+def _valide_motif(value: str) -> str:
+    if value is None:
+        raise ValueError("Le motif ne peut pas être null.")
+    value = value.strip()
+    if not value:
+        raise ValueError("Le motif est requis.")
+    if len(value) > _MAX_MOTIF:
+        raise ValueError(f"Le motif est trop long ({_MAX_MOTIF} caractères maximum).")
+    return value
 
 
 def _valide_libelle(value: str) -> str:
@@ -61,3 +73,25 @@ class NoteRead(BaseModel):
 
 class NoteDetail(NoteRead):
     depenses: list[DepenseRead]
+
+
+class NoteRefus(BaseModel):
+    motif: str
+
+    _motif = field_validator("motif")(_valide_motif)
+
+
+class TransitionActeur(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    display_name: str
+
+
+class TransitionRead(BaseModel):
+    id: int
+    acteur: TransitionActeur
+    ancien_statut: str
+    nouveau_statut: str
+    motif: str | None
+    created_at: datetime
