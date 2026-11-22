@@ -1,6 +1,5 @@
 from app.db import Base
+from app.models.user import User
+from app.models.user_session import UserSession
 
-# Importer ici chaque nouveau modèle pour qu'Alembic le détecte, par exemple :
-# from app.models.user import User  # noqa: F401
-
-__all__ = ["Base"]
+__all__ = ["Base", "User", "UserSession"]
