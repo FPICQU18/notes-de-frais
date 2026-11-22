@@ -3,6 +3,9 @@
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
 
+# Longueur minimale du mot de passe, partagée par l'API (schéma) et la CLI.
+MIN_PASSWORD_LENGTH = 12
+
 _password_hash = PasswordHash((Argon2Hasher(),))
 
 

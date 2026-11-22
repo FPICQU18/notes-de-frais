@@ -6,10 +6,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from app.db import SessionLocal
-from app.models.user import User
-from app.security import hash_password
-
-MIN_PASSWORD_LENGTH = 12
+from app.models.user import MAX_DISPLAY_NAME_LENGTH, User
+from app.security import MIN_PASSWORD_LENGTH, hash_password
 
 # Validation d'e-mail volontairement simple et stricte : une seule arobase, un domaine
 # avec au moins un point, pas d'espace, caractères ASCII uniquement.
@@ -34,6 +32,8 @@ def create_admin() -> int:
     display_name = input("Nom affiché : ").strip()
     if not display_name:
         return _fail("le nom affiché ne peut pas être vide.")
+    if len(display_name) > MAX_DISPLAY_NAME_LENGTH:
+        return _fail(f"le nom affiché ne peut pas dépasser {MAX_DISPLAY_NAME_LENGTH} caractères.")
 
     password = getpass.getpass("Mot de passe (12 caractères min.) : ")
     if len(password) < MIN_PASSWORD_LENGTH:
