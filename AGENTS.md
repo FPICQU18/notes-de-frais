@@ -60,18 +60,24 @@ si tu ne peux pas lancer Postgres localement, pousse et lis le résultat de la C
 - Message d'erreur de connexion identique que l'e-mail existe ou non.
 
 ### Notes de frais
-- Statuts : `brouillon` → `soumise` → `validee` ou `refusee` → `remboursee`.
+- Une **dépense** est un ticket (libellé, date de dépense, montant en centimes,
+  catégorie, commentaire, propriétaire) ; elle est saisie par l'API au fil de l'eau.
+- Une **note de frais** est un **dossier** qui regroupe une ou plusieurs dépenses ;
+  c'est le dossier qui porte le statut et le circuit de validation.
+- Une dépense appartient à **au plus un** dossier. Le contenu d'un dossier n'est
+  modifiable qu'au statut `brouillon`.
+- Statuts du dossier : `brouillon` → `soumise` → `validee` ou `refusee` → `remboursee`.
 - Transitions autorisées :
   - `brouillon` → `soumise` : le propriétaire ;
   - `soumise` → `validee` / `refusee` : un valideur **autre que le propriétaire** (motif obligatoire pour un refus) ;
   - `refusee` → `brouillon` : le propriétaire, pour corriger ;
   - `validee` → `remboursee` : un admin.
-- Une note n'est modifiable ou supprimable qu'au statut `brouillon`.
+- Un dossier n'est modifiable ou supprimable qu'au statut `brouillon`.
 - Chaque transition est historisée (qui, quand, ancien et nouveau statut, motif).
-- Visibilité : un utilisateur ne voit que ses notes ; un valideur voit en plus les notes
-  soumises et au-delà ; un admin voit tout.
-- **Tout contrôle d'accès se fait côté serveur**, le frontend ne fait qu'adapter l'affichage.
+- Visibilité : un utilisateur ne voit que ses dossiers et ses dépenses ; un valideur
+  voit en plus les dossiers soumis et au-delà ; un admin voit tout.
 
+- **Tout contrôle d'accès se fait côté serveur**, le frontend ne fait qu'adapter l'affichage.
 ### Montants et dates
 - Montants en **centimes, entiers** (`int`), devise EUR. Jamais de `float`.
 - Date de dépense : type `date`. Horodatages : `datetime` avec fuseau, en UTC.
