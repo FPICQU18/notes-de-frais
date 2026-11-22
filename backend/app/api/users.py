@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as OrmSession
 
 from app.auth.dependencies import require_role
@@ -26,11 +27,20 @@ _EMAIL_DEJA_UTILISE = "Un compte existe déjà avec cet e-mail."
 _COMPTE_INTROUVABLE = "Compte introuvable."
 
 
+def _email_deja_utilise(db: OrmSession, email: str) -> bool:
+    """Pré-vérification : vrai si un compte existe déjà avec cet e-mail.
+
+    Extraite en helper pour que le chemin de violation de la contrainte d'unicité
+    soit testable (course entre deux créations simultanées).
+    """
+    existing = db.execute(select(User.id).where(User.email == email)).scalar_one_or_none()
+    return existing is not None
+
+
 @router.post("", response_model=UserAdmin, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreate, db: DbSession, _admin: Admin) -> User:
     """Crée un compte (e-mail normalisé, mot de passe haché en Argon2)."""
-    existing = db.execute(select(User.id).where(User.email == payload.email)).scalar_one_or_none()
-    if existing is not None:
+    if _email_deja_utilise(db, payload.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_EMAIL_DEJA_UTILISE)
 
     user = User(
@@ -41,7 +51,16 @@ def create_user(payload: UserCreate, db: DbSession, _admin: Admin) -> User:
         password_hash=hash_password(payload.password),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Course entre deux créations simultanées : la pré-vérification a été
+        # contournée et la contrainte d'unicité a tranché. On annule la
+        # transaction pour ne pas laisser la session en erreur.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_EMAIL_DEJA_UTILISE
+        ) from None
     db.refresh(user)
     return user
 
