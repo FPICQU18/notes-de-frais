@@ -268,6 +268,18 @@ def test_list_notes_uniquement_ses_notes_triees_et_totaux(client, db_session):
     assert by_id[recente.id]["total_centimes"] == 2000
 
 
+def test_list_notes_created_at_egal_trie_par_id_desc(client, db_session):
+    user = _connect(client, db_session)
+    meme_moment = datetime(2024, 2, 1, tzinfo=UTC)
+    premiere = _make_note(db_session, user, libelle="Premiere", created_at=meme_moment)
+    seconde = _make_note(db_session, user, libelle="Seconde", created_at=meme_moment)
+
+    response = client.get("/api/v1/notes")
+
+    assert response.status_code == 200
+    assert [n["id"] for n in response.json()] == [seconde.id, premiere.id]
+
+
 def test_list_notes_sans_note_200_vide(client, db_session):
     _connect(client, db_session)
 
@@ -517,6 +529,22 @@ def test_retrait_depense_non_rattachee_409(client, db_session):
 
     assert response.status_code == 409
     assert db_session.get(Depense, depense.id).note_id is None
+
+
+def test_retrait_depense_dans_autre_note_409(client, db_session):
+    user = _connect(client, db_session)
+    note_origine = _make_note(db_session, user)
+    note_cible = _make_note(db_session, user)
+    depense = _make_depense(db_session, user, note_id=note_origine.id)
+
+    response = client.delete(f"/api/v1/notes/{note_cible.id}/depenses/{depense.id}")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "La dépense n'est pas dans ce dossier."
+    assert db_session.get(Depense, depense.id) is not None
+    assert db_session.get(Depense, depense.id).note_id == note_origine.id
+    assert db_session.get(Note, note_origine.id) is not None
+    assert db_session.get(Note, note_cible.id) is not None
 
 
 def test_retrait_note_non_brouillon_409(client, db_session):

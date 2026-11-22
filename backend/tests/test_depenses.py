@@ -544,6 +544,25 @@ def test_delete_depense_dossier_non_brouillon_409_intacte(client, db_session):
     assert db_session.get(Note, note.id) is not None
 
 
+def test_patch_delete_depense_autre_utilisateur_dossier_non_brouillon_404(client, db_session):
+    _connect(client, db_session)
+    autre = _make_user(db_session, email="autre@example.com")
+    note_soumise = _make_note(db_session, autre, statut="soumise")
+    depense = _make_depense(db_session, autre, note_id=note_soumise.id)
+
+    patch = client.patch(f"/api/v1/depenses/{depense.id}", json={"libelle": "Modifiée"})
+    delete = client.delete(f"/api/v1/depenses/{depense.id}")
+
+    assert patch.status_code == 404
+    assert delete.status_code == 404
+    assert patch.json() == {"detail": "Dépense introuvable."}
+    assert delete.json() == {"detail": "Dépense introuvable."}
+    stored = db_session.get(Depense, depense.id)
+    assert stored is not None
+    assert stored.libelle == depense.libelle
+    assert stored.note_id == note_soumise.id
+
+
 def test_patch_depense_dossier_brouillon_200(client, db_session):
     user = _connect(client, db_session)
     note = _make_note(db_session, user)
