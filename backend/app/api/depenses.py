@@ -3,7 +3,8 @@
 Toutes les routes exigent un utilisateur connecté et ne manipulent que les
 dépenses dont il est le propriétaire : une dépense appartenant à un autre
 compte renvoie 404, identique à un identifiant inexistant (aucune fuite
-d'existence).
+d'existence). Une dépense rattachée à un dossier qui n'est plus au statut
+`brouillon` ne peut plus être modifiée ni supprimée (409).
 """
 
 from typing import Annotated
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.auth.dependencies import get_current_user
 from app.db import get_db
-from app.models import Depense, User
+from app.models import Depense, Note, User
 from app.schemas.depense import DepenseCreate, DepenseRead, DepenseUpdate
 
 router = APIRouter(prefix="/api/v1/depenses", tags=["depenses"])
@@ -23,6 +24,9 @@ DbSession = Annotated[OrmSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 _DEPENSE_INTROUVABLE = "Dépense introuvable."
+_DEPENSE_DOSSIER_NON_BROUILLON = (
+    "La dépense appartient à un dossier qui n'est pas au statut brouillon."
+)
 
 
 def _get_owned_depense(db: OrmSession, user_id: int, depense_id: int) -> Depense:
@@ -33,6 +37,17 @@ def _get_owned_depense(db: OrmSession, user_id: int, depense_id: int) -> Depense
     if depense is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_DEPENSE_INTROUVABLE)
     return depense
+
+
+def _ensure_depense_modifiable(db: OrmSession, depense: Depense) -> None:
+    """Lève 409 si la dépense est rattachée à un dossier non `brouillon`."""
+    if depense.note_id is None:
+        return
+    note = db.get(Note, depense.note_id)
+    if note is not None and note.statut != "brouillon":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_DEPENSE_DOSSIER_NON_BROUILLON
+        )
 
 
 @router.post("", response_model=DepenseRead, status_code=status.HTTP_201_CREATED)
@@ -85,6 +100,7 @@ def update_depense(
 ) -> Depense:
     """Modifie partiellement une dépense (seuls les champs fournis sont changés)."""
     depense = _get_owned_depense(db, current_user.id, depense_id)
+    _ensure_depense_modifiable(db, depense)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(depense, field, value)
     db.commit()
@@ -96,6 +112,7 @@ def update_depense(
 def delete_depense(depense_id: int, db: DbSession, current_user: CurrentUser) -> None:
     """Supprime une dépense du propriétaire connecté."""
     depense = _get_owned_depense(db, current_user.id, depense_id)
+    _ensure_depense_modifiable(db, depense)
     db.delete(depense)
     db.commit()
     return None

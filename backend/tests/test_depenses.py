@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session as OrmSession
 
 from app.db import get_db
 from app.main import app
-from app.models import Depense, User
+from app.models import Depense, Note, User
 from app.security import hash_password
 
 PASSWORD = "mot-de-passe-secret"
@@ -90,6 +90,20 @@ def _make_depense(
     db_session.commit()
     db_session.refresh(depense)
     return depense
+
+
+def _make_note(
+    db_session: OrmSession,
+    user: User,
+    *,
+    libelle: str = "Note de frais",
+    statut: str = "brouillon",
+) -> Note:
+    note = Note(user_id=user.id, libelle=libelle, statut=statut)
+    db_session.add(note)
+    db_session.commit()
+    db_session.refresh(note)
+    return note
 
 
 def _count_depenses(db_session: OrmSession) -> int:
@@ -305,8 +319,9 @@ def test_list_depenses_uniquement_ses_depenses_triees(client, db_session):
 
 def test_list_depenses_a_classer_true(client, db_session):
     user = _connect(client, db_session)
+    note = _make_note(db_session, user)
     a_classer = _make_depense(db_session, user, libelle="A classer", note_id=None)
-    _make_depense(db_session, user, libelle="Rattachee", note_id=1)
+    _make_depense(db_session, user, libelle="Rattachee", note_id=note.id)
 
     response = client.get("/api/v1/depenses?a_classer=true")
 
@@ -318,8 +333,9 @@ def test_list_depenses_a_classer_true(client, db_session):
 @pytest.mark.parametrize("query", ["", "?a_classer=false"])
 def test_list_depenses_a_classer_false_ou_absent(client, db_session, query):
     user = _connect(client, db_session)
+    note = _make_note(db_session, user)
     a_classer = _make_depense(db_session, user, libelle="A classer", note_id=None)
-    rattachee = _make_depense(db_session, user, libelle="Rattachee", note_id=1)
+    rattachee = _make_depense(db_session, user, libelle="Rattachee", note_id=note.id)
 
     response = client.get(f"/api/v1/depenses{query}")
 
@@ -496,6 +512,79 @@ def test_delete_deja_supprimee_404(client, db_session):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Dépense introuvable."}
+
+
+# --- Dépenses rattachées à un dossier non brouillon --------------------------
+
+
+def test_patch_depense_dossier_non_brouillon_409_inchangee(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user, statut="soumise")
+    depense = _make_depense(db_session, user, note_id=note.id)
+
+    response = client.patch(f"/api/v1/depenses/{depense.id}", json={"libelle": "Modifiée"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "La dépense appartient à un dossier qui n'est pas au statut brouillon."
+    )
+    stored = db_session.get(Depense, depense.id)
+    assert stored.libelle == depense.libelle
+
+
+def test_delete_depense_dossier_non_brouillon_409_intacte(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user, statut="soumise")
+    depense = _make_depense(db_session, user, note_id=note.id)
+
+    response = client.delete(f"/api/v1/depenses/{depense.id}")
+
+    assert response.status_code == 409
+    assert db_session.get(Depense, depense.id) is not None
+    assert db_session.get(Note, note.id) is not None
+
+
+def test_patch_delete_depense_autre_utilisateur_dossier_non_brouillon_404(client, db_session):
+    _connect(client, db_session)
+    autre = _make_user(db_session, email="autre@example.com")
+    note_soumise = _make_note(db_session, autre, statut="soumise")
+    depense = _make_depense(db_session, autre, note_id=note_soumise.id)
+
+    patch = client.patch(f"/api/v1/depenses/{depense.id}", json={"libelle": "Modifiée"})
+    delete = client.delete(f"/api/v1/depenses/{depense.id}")
+
+    assert patch.status_code == 404
+    assert delete.status_code == 404
+    assert patch.json() == {"detail": "Dépense introuvable."}
+    assert delete.json() == {"detail": "Dépense introuvable."}
+    stored = db_session.get(Depense, depense.id)
+    assert stored is not None
+    assert stored.libelle == depense.libelle
+    assert stored.note_id == note_soumise.id
+
+
+def test_patch_depense_dossier_brouillon_200(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    depense = _make_depense(db_session, user, note_id=note.id)
+
+    response = client.patch(f"/api/v1/depenses/{depense.id}", json={"libelle": "Modifiée"})
+
+    assert response.status_code == 200
+    assert response.json()["libelle"] == "Modifiée"
+    assert response.json()["note_id"] == note.id
+
+
+def test_delete_depense_dossier_brouillon_204(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    depense = _make_depense(db_session, user, note_id=note.id)
+
+    response = client.delete(f"/api/v1/depenses/{depense.id}")
+
+    assert response.status_code == 204
+    assert db_session.get(Depense, depense.id) is None
+    assert db_session.get(Note, note.id) is not None
 
 
 # --- Autorisation ------------------------------------------------------------

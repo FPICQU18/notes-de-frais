@@ -1,8 +1,9 @@
 """Modèle de dépense : un ticket saisi par un utilisateur, à regrouper dans une note.
 
-`note_id` est prévu dès maintenant mais reste `NULL` tant que la table `notes`
-n'existe pas (US-011) : la colonne est donc un simple `Integer` sans contrainte
-de clé étrangère, pour que `Base.metadata.create_all` continue de fonctionner.
+`note_id` référence le dossier (`notes.id`) auquel la dépense est rattachée ;
+il reste `NULL` tant qu'elle est « à classer ». Le rattachement est détaché
+(`ON DELETE SET NULL`) quand le dossier est supprimé : les dépenses ne sont
+jamais supprimées avec leur dossier.
 """
 
 from datetime import date, datetime
@@ -43,7 +44,9 @@ class Depense(Base):
     montant_centimes: Mapped[int] = mapped_column(Integer, nullable=False)
     categorie: Mapped[str] = mapped_column(String(20), nullable=False)
     commentaire: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    note_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note_id: Mapped[int | None] = mapped_column(
+        ForeignKey("notes.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.func.now()
     )
