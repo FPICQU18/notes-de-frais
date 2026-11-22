@@ -296,3 +296,76 @@ test("utilisateur sur /validation : redirigé vers l'accueil, sans onglet Valida
   expect(within(nav).queryByRole("link", { name: "Validation" })).not.toBeInTheDocument();
   expect(within(nav).getByRole("link", { name: "Profil" })).toBeInTheDocument();
 });
+
+test("utilisateur : les 5 emplacements de la barre sont dans le bon ordre", async () => {
+  mockApi(UTILISATEUR);
+  renderApp();
+
+  await screen.findByRole("heading", { name: "Bonjour Camille" });
+
+  const nav = screen.getByRole("navigation", { name: "Navigation principale" });
+  const libelles = within(nav)
+    .getAllByRole("link")
+    .map((lien) => lien.getAttribute("aria-label"));
+
+  expect(libelles).toEqual([
+    "Accueil",
+    "Dépenses",
+    "Ajouter une dépense",
+    "Dossiers",
+    "Profil",
+  ]);
+});
+
+test("valideur sur /profil : redirigé vers l'accueil, sans lien Profil", async () => {
+  mockApi(VALIDEUR);
+  renderApp("/profil");
+
+  expect(await screen.findByRole("heading", { name: "Bonjour Valideur" })).toBeInTheDocument();
+
+  const nav = screen.getByRole("navigation", { name: "Navigation principale" });
+  expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
+  expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
+});
+
+test("admin sur /profil : redirigé vers l'accueil, sans lien Profil", async () => {
+  mockApi(ADMIN);
+  renderApp("/profil");
+
+  expect(await screen.findByRole("heading", { name: "Bonjour Admin" })).toBeInTheDocument();
+
+  const nav = screen.getByRole("navigation", { name: "Navigation principale" });
+  expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
+  expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
+});
+
+test("utilisateur sur /depenses : titre « Dépenses » et « Bientôt disponible. », onglet actif", async () => {
+  mockApi(UTILISATEUR);
+  renderApp("/depenses");
+
+  expect(await screen.findByRole("heading", { name: "Dépenses" })).toBeInTheDocument();
+  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Dépenses" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
+test("utilisateur sur /profil : titre « Profil » et « Bientôt disponible. »", async () => {
+  mockApi(UTILISATEUR);
+  renderApp("/profil");
+
+  expect(await screen.findByRole("heading", { name: "Profil" })).toBeInTheDocument();
+  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+});
+
+test("focus du h1 à l'arrivée sur une page vide après clic sur Dossiers", async () => {
+  mockApi(UTILISATEUR);
+  const utilisateur = userEvent.setup();
+  renderApp();
+
+  await screen.findByRole("heading", { name: "Bonjour Camille" });
+  await utilisateur.click(screen.getByRole("link", { name: "Dossiers" }));
+
+  expect(await screen.findByRole("heading", { name: "Dossiers" })).toHaveFocus();
+});
