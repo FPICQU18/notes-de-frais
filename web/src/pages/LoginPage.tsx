@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, apiPost, type UserRead } from "../api/client";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 interface LoginPageProps {
   onConnecte: (utilisateur: UserRead) => void;
@@ -69,8 +72,8 @@ export function LoginPage({ onConnecte, focusTitre }: LoginPageProps) {
       )}
       <form className="formulaire" onSubmit={gererSoumission} noValidate>
         <div className="champ">
-          <label htmlFor="email">Adresse e-mail</label>
-          <input
+          <Label htmlFor="email">Adresse e-mail</Label>
+          <Input
             id="email"
             name="email"
             type="email"
@@ -84,8 +87,8 @@ export function LoginPage({ onConnecte, focusTitre }: LoginPageProps) {
           />
         </div>
         <div className="champ">
-          <label htmlFor="password">Mot de passe</label>
-          <input
+          <Label htmlFor="password">Mot de passe</Label>
+          <Input
             id="password"
             name="password"
             type="password"
@@ -97,14 +100,14 @@ export function LoginPage({ onConnecte, focusTitre }: LoginPageProps) {
             aria-describedby={erreur !== null ? "erreur-connexion" : undefined}
           />
         </div>
-        <button
+        <Button
           type="submit"
-          className="bouton bouton--primaire"
+          className="h-14 w-full text-base font-bold"
           disabled={envoiEnCours}
           aria-busy={envoiEnCours}
         >
           {envoiEnCours ? "Connexion…" : "Se connecter"}
-        </button>
+        </Button>
       </form>
     </main>
   );

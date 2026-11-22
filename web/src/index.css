@@ -465,3 +465,351 @@ a:focus-visible {
     padding-inline: var(--espace-5);
   }
 }
+
+/* ===================================================== accueil (US-016) */
+
+.accueil-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-3);
+  margin-bottom: var(--espace-5);
+}
+
+.accueil-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: var(--taille-petit);
+  font-weight: 800;
+}
+
+.accueil-entete__identite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.accueil-entete__date {
+  margin: 0;
+  font-size: var(--taille-libelle);
+  color: var(--muted-foreground);
+}
+
+.accueil-entete__titre {
+  margin: 0;
+  font-size: var(--taille-titre);
+  line-height: var(--hauteur-ligne-titre);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+}
+
+.accueil-entete__titre:focus {
+  outline: none;
+}
+
+.accueil-deconnexion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--cible-min);
+  height: var(--cible-min);
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primaire-fonce);
+  cursor: pointer;
+}
+
+.accueil-deconnexion:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.accueil-deconnexion:disabled {
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+}
+
+.accueil-deconnexion:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ---- bandeau primaire du mois ---- */
+
+.accueil-bandeau {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-4);
+  padding: 22px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 28px;
+}
+
+.accueil-bandeau__libelle {
+  margin: 0;
+  font-size: var(--taille-petit);
+  font-weight: 600;
+}
+
+.accueil-bandeau__montant {
+  margin: 0;
+  font-size: 38px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.accueil-pastilles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+}
+
+.accueil-pastille {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-min);
+  padding: var(--espace-2) var(--espace-3);
+  border-radius: var(--rayon-pastille);
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--primary-foreground);
+  font-size: var(--taille-libelle);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.accueil-pastille:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.accueil-pastille:focus-visible {
+  outline: 2px solid var(--primary-foreground);
+  outline-offset: 2px;
+}
+
+.accueil-scanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espace-2);
+  min-height: var(--hauteur-champ);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--primaire-fonce);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.accueil-scanner:hover {
+  background: var(--accent);
+}
+
+.accueil-scanner:focus-visible {
+  outline: 2px solid var(--primary-foreground);
+  outline-offset: 2px;
+}
+
+/* ---- section « Récentes » ---- */
+
+.accueil-recentes {
+  margin-top: var(--espace-5);
+}
+
+.accueil-recentes__entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-2);
+  margin-bottom: var(--espace-3);
+}
+
+.accueil-recentes__titre {
+  margin: 0;
+  font-size: var(--taille-petit);
+  font-weight: 800;
+}
+
+.accueil-recentes__tout-voir {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-1);
+  min-height: var(--cible-min);
+  padding: var(--espace-2);
+  color: var(--primaire-fonce);
+  font-size: var(--taille-petit);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.accueil-recentes__tout-voir:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.accueil-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carte-depense {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-3);
+  padding: var(--espace-3);
+  background: var(--card);
+  border-radius: 22px;
+  box-shadow: var(--ombre-carte);
+}
+
+.carte-depense__icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--rayon-bulle);
+}
+
+.carte-depense__icone.categorie-transport {
+  background: var(--categorie-transport-fond);
+  color: var(--categorie-transport-texte);
+}
+
+.carte-depense__icone.categorie-repas {
+  background: var(--categorie-repas-fond);
+  color: var(--categorie-repas-texte);
+}
+
+.carte-depense__icone.categorie-hebergement {
+  background: var(--categorie-hebergement-fond);
+  color: var(--categorie-hebergement-texte);
+}
+
+.carte-depense__icone.categorie-carburant {
+  background: var(--categorie-carburant-fond);
+  color: var(--categorie-carburant-texte);
+}
+
+.carte-depense__icone.categorie-peage-parking {
+  background: var(--categorie-peage-parking-fond);
+  color: var(--categorie-peage-parking-texte);
+}
+
+.carte-depense__icone.categorie-fournitures {
+  background: var(--categorie-fournitures-fond);
+  color: var(--categorie-fournitures-texte);
+}
+
+.carte-depense__icone.categorie-autre {
+  background: var(--categorie-autre-fond);
+  color: var(--categorie-autre-texte);
+}
+
+.carte-depense__corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.carte-depense__libelle {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.carte-depense__detail {
+  margin: 0;
+  font-size: var(--taille-libelle);
+  color: var(--muted-foreground);
+}
+
+.carte-depense__a-classer {
+  color: var(--primaire-fonce);
+  font-weight: 600;
+}
+
+.carte-depense__montant {
+  margin: 0;
+  flex-shrink: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- états vide / erreur de l'accueil ---- */
+
+.accueil-vide {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+.accueil-erreur {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-3);
+}
+
+.accueil-erreur .alerte {
+  margin-bottom: 0;
+}
+
+.accueil-erreur-compacte {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-3);
+  margin-top: var(--espace-4);
+  padding: var(--espace-3);
+  background: var(--erreur-fond);
+  border-radius: var(--rayon-bulle);
+}
+
+.accueil-erreur-compacte__texte {
+  margin: 0;
+  color: var(--erreur-texte);
+  font-size: var(--taille-libelle);
+  overflow-wrap: anywhere;
+}
+
+.accueil-retenter {
+  flex-shrink: 0;
+  min-height: var(--cible-min);
+  padding: var(--espace-2);
+  border: none;
+  border-radius: var(--rayon-bulle);
+  background: transparent;
+  color: var(--erreur-texte);
+  font: inherit;
+  font-size: var(--taille-petit);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accueil-retenter:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.accueil-retenter:focus-visible {
+  outline: 2px solid var(--erreur-texte);
+  outline-offset: 2px;
+}

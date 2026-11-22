@@ -157,6 +157,26 @@ test("déconnexion : logout appelé puis retour à la connexion avec champs vide
   aucunAppelHealth(fetchMock.mock.calls);
 });
 
+test("session expirée (401 sur un appel de l'accueil) : retour à la connexion sans boucle", async () => {
+  let appelsAccueil = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+    const url = String(entree);
+    if (url.endsWith("/api/v1/auth/me")) {
+      return jsonResponse(UTILISATEUR);
+    }
+    appelsAccueil += 1;
+    // Les appels métier de l'accueil renvoient 401 : session expirée.
+    return jsonResponse({ detail: "Session expirée." }, 401);
+  });
+  renderApp();
+
+  expect(await screen.findByLabelText("Adresse e-mail")).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Bonjour Camille" })).not.toBeInTheDocument();
+
+  await waitFor(() => expect(appelsAccueil).toBe(3));
+  expect(appelsAccueil).toBe(3);
+});
+
 test("réponse 422 : le premier message de detail[] est affiché, sans JSON brut", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
     const url = String(entree);

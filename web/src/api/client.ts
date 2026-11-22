@@ -5,6 +5,46 @@ export interface UserRead {
   role: string;
 }
 
+export type Categorie =
+  | "transport"
+  | "repas"
+  | "hebergement"
+  | "carburant"
+  | "peage_parking"
+  | "fournitures"
+  | "autre";
+
+export type StatutNote =
+  | "brouillon"
+  | "soumise"
+  | "validee"
+  | "refusee"
+  | "remboursee";
+
+export interface Depense {
+  id: number;
+  libelle: string;
+  /** Date de dépense au format `AAAA-MM-JJ`. */
+  date_depense: string;
+  montant_centimes: number;
+  categorie: Categorie;
+  commentaire: string | null;
+  /** `null` signifie « à classer » (non rattachée à un dossier). */
+  note_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Note {
+  id: number;
+  libelle: string;
+  statut: StatutNote;
+  total_centimes: number;
+  nb_depenses: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export const MESSAGE_RESEAU = "Serveur injoignable. Vérifiez votre connexion.";
 export const MESSAGE_GENERIQUE = "Une erreur est survenue.";
 
