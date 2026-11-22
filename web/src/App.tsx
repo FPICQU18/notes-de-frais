@@ -83,8 +83,14 @@ export function AppRoutes() {
     );
   }
 
+  // L'état « connecte » n'est atteint qu'avec un utilisateur chargé ; on
+  // resserre le type pour le reste du rendu.
+  if (utilisateur === null) {
+    return null;
+  }
+
   const estValideur =
-    utilisateur?.role === "valideur" || utilisateur?.role === "admin";
+    utilisateur.role === "valideur" || utilisateur.role === "admin";
 
   return (
     <Routes>
@@ -95,6 +101,7 @@ export function AppRoutes() {
             <HomePage
               utilisateur={utilisateur}
               onDeconnecte={gererDeconnexion}
+              onSessionExpiree={gererDeconnexion}
               focusTitre={focusTitre}
             />
           }

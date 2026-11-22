@@ -120,8 +120,83 @@ test("échec 401 : message API affiché, focus sur l'alerte, valeurs conservées
 
   expect(screen.getByLabelText("Adresse e-mail")).toHaveValue(UTILISATEUR.email);
   expect(screen.getByLabelText("Mot de passe")).toHaveValue("mauvais");
+  expect(screen.getByLabelText("Adresse e-mail")).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByLabelText("Adresse e-mail")).toHaveAttribute(
+    "aria-describedby",
+    "erreur-connexion",
+  );
+  expect(screen.getByLabelText("Mot de passe")).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByLabelText("Mot de passe")).toHaveAttribute(
+    "aria-describedby",
+    "erreur-connexion",
+  );
   expect(screen.getByRole("button", { name: "Se connecter" })).toBeInTheDocument();
   aucunAppelHealth(fetchMock.mock.calls);
+});
+
+test("soumission en cours : bouton désactivé « Connexion… » avec aria-busy puis accueil", async () => {
+  let resoudreLogin!: (reponse: Response) => void;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+    const url = String(entree);
+    if (url.endsWith("/api/v1/auth/me")) {
+      return jsonResponse({ detail: "Authentification requise." }, 401);
+    }
+    if (url.endsWith("/api/v1/auth/login")) {
+      return new Promise<Response>((resoudre) => {
+        resoudreLogin = resoudre;
+      });
+    }
+    return jsonResponse({ detail: "Introuvable" }, 404);
+  });
+  const utilisateur = userEvent.setup();
+  renderApp();
+
+  await screen.findByLabelText("Adresse e-mail");
+  await utilisateur.type(screen.getByLabelText("Adresse e-mail"), UTILISATEUR.email);
+  await utilisateur.type(screen.getByLabelText("Mot de passe"), MOT_DE_PASSE_VALIDE);
+  await utilisateur.click(screen.getByRole("button", { name: "Se connecter" }));
+
+  const bouton = await screen.findByRole("button", { name: "Connexion…" });
+  expect(bouton).toBeDisabled();
+  expect(bouton).toHaveAttribute("aria-busy", "true");
+
+  resoudreLogin(jsonResponse(UTILISATEUR));
+  expect(await screen.findByRole("heading", { name: "Bonjour Camille" })).toBeInTheDocument();
+});
+
+test("échec réseau à la connexion : « Serveur injoignable… », focus et saisie conservée", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+    const url = String(entree);
+    if (url.endsWith("/api/v1/auth/me")) {
+      return jsonResponse({ detail: "Authentification requise." }, 401);
+    }
+    if (url.endsWith("/api/v1/auth/login")) {
+      throw new Error("réseau");
+    }
+    return jsonResponse({ detail: "Introuvable" }, 404);
+  });
+  const utilisateur = userEvent.setup();
+  renderApp();
+
+  await screen.findByLabelText("Adresse e-mail");
+  await utilisateur.type(screen.getByLabelText("Adresse e-mail"), UTILISATEUR.email);
+  await utilisateur.type(screen.getByLabelText("Mot de passe"), MOT_DE_PASSE_VALIDE);
+  await utilisateur.click(screen.getByRole("button", { name: "Se connecter" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Serveur injoignable. Vérifiez votre connexion.");
+  await waitFor(() => expect(alerte).toHaveFocus());
+  expect(screen.getByLabelText("Adresse e-mail")).toHaveValue(UTILISATEUR.email);
+  expect(screen.getByLabelText("Mot de passe")).toHaveValue(MOT_DE_PASSE_VALIDE);
+  expect(screen.getByRole("button", { name: "Se connecter" })).toBeInTheDocument();
+});
+
+test("session ouverte sur /connexion : redirigé vers l'accueil sans formulaire", async () => {
+  mockApi(UTILISATEUR);
+  renderApp("/connexion");
+
+  expect(await screen.findByRole("heading", { name: "Bonjour Camille" })).toBeInTheDocument();
+  expect(screen.queryByLabelText("Adresse e-mail")).not.toBeInTheDocument();
 });
 
 test("session existante : /me 200 mène directement à l'accueil sans login", async () => {
@@ -155,6 +230,26 @@ test("déconnexion : logout appelé puis retour à la connexion avec champs vide
   expect(screen.getByLabelText("Adresse e-mail")).toHaveValue("");
   expect(screen.getByLabelText("Mot de passe")).toHaveValue("");
   aucunAppelHealth(fetchMock.mock.calls);
+});
+
+test("session expirée (401 sur un appel de l'accueil) : retour à la connexion sans boucle", async () => {
+  let appelsAccueil = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+    const url = String(entree);
+    if (url.endsWith("/api/v1/auth/me")) {
+      return jsonResponse(UTILISATEUR);
+    }
+    appelsAccueil += 1;
+    // Les appels métier de l'accueil renvoient 401 : session expirée.
+    return jsonResponse({ detail: "Session expirée." }, 401);
+  });
+  renderApp();
+
+  expect(await screen.findByLabelText("Adresse e-mail")).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Bonjour Camille" })).not.toBeInTheDocument();
+
+  await waitFor(() => expect(appelsAccueil).toBe(3));
+  expect(appelsAccueil).toBe(3);
 });
 
 test("réponse 422 : le premier message de detail[] est affiché, sans JSON brut", async () => {
