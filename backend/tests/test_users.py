@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
 
+from app.api import users as users_api
 from app.db import get_db
 from app.main import app
 from app.models import User, UserSession
@@ -180,6 +181,45 @@ def test_create_user_email_doublon_casse_differente_409(client, db_session):
     assert _count_users(db_session) == 2
 
 
+def test_create_user_email_doublon_contrainte_unicite_409(monkeypatch, client, db_session):
+    """Course entre deux créations simultanées : la contrainte d'unicité tranche.
+
+    La pré-vérification est neutralisée pour simuler deux requêtes qui passent
+    toutes deux le contrôle puis entrent en conflit au commit. La seconde doit
+    renvoyer 409 (jamais 500), annuler la transaction et ne rien fuiter.
+    """
+    _connect_as_admin(client, db_session)
+    monkeypatch.setattr(users_api, "_email_deja_utilise", lambda db, email: False)
+
+    payload = {
+        "email": "marie@example.com",
+        "display_name": "Marie Curie",
+        "role": "utilisateur",
+        "password": PASSWORD,
+    }
+
+    first = client.post("/api/v1/users", json=payload)
+    assert first.status_code == 201
+
+    second = client.post("/api/v1/users", json=payload)
+    assert second.status_code == 409
+    assert second.json() == {"detail": "Un compte existe déjà avec cet e-mail."}
+
+    # Aucun détail SQL, ni nom de contrainte, ni trace ne fuite.
+    text = second.text.lower()
+    assert "sql" not in text
+    assert "uq_users_email" not in text
+    assert "traceback" not in text
+
+    # Rollback : un seul compte créé (admin + marie), pas de doublon, et la
+    # session reste utilisable.
+    assert _count_users(db_session) == 2
+    marie = (
+        db_session.execute(sa.select(User).where(User.email == "marie@example.com")).scalars().all()
+    )
+    assert len(marie) == 1
+
+
 @pytest.mark.parametrize(
     "email",
     [
@@ -302,6 +342,48 @@ def test_create_user_display_name_vide_422(client, db_session, display_name):
 
     assert response.status_code == 422
     assert _count_users(db_session) == 1
+
+
+def test_create_user_display_name_trop_long_422(client, db_session):
+    _connect_as_admin(client, db_session)
+
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "marie@example.com",
+            "display_name": "x" * 256,
+            "role": "utilisateur",
+            "password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert any("255" in error.get("msg", "") for error in body["detail"])
+    # Aucun compte créé (seul l'admin existe).
+    assert _count_users(db_session) == 1
+
+
+def test_create_user_display_name_255_accepte(client, db_session):
+    _connect_as_admin(client, db_session)
+    name = "x" * 255
+
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "marie@example.com",
+            "display_name": name,
+            "role": "utilisateur",
+            "password": PASSWORD,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["display_name"] == name
+    stored = db_session.execute(
+        sa.select(User).where(User.email == "marie@example.com")
+    ).scalar_one()
+    assert stored.display_name == name
 
 
 def test_create_user_role_admin_201(client, db_session):

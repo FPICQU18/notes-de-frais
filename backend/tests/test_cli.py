@@ -95,6 +95,28 @@ def test_create_admin_password_too_short(run_cli, db_session):
     assert count_users(db_session) == 0
 
 
+def test_create_admin_display_name_trop_long(run_cli, db_session):
+    code, out, err = run_cli(
+        inputs=["admin@example.com", "x" * 256],
+        passwords=[VALID_PASSWORD, VALID_PASSWORD],
+    )
+    assert code == 1
+    assert "255" in err
+    assert count_users(db_session) == 0
+
+
+def test_create_admin_display_name_255_accepte(run_cli, db_session):
+    name = "x" * 255
+    code, out, err = run_cli(
+        inputs=["admin@example.com", name],
+        passwords=[VALID_PASSWORD, VALID_PASSWORD],
+    )
+    assert code == 0
+    assert count_users(db_session) == 1
+    user = db_session.execute(sa.select(User).where(User.email == "admin@example.com")).scalar_one()
+    assert user.display_name == name
+
+
 def test_create_admin_duplicate_email(run_cli, db_session):
     code, _, _ = run_cli(
         inputs=["admin@example.com", "Admin Test"],
