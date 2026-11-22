@@ -9,8 +9,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.cli import MIN_PASSWORD_LENGTH
-from app.models.user import ROLES
+from app.models.user import MAX_DISPLAY_NAME_LENGTH, ROLES
+from app.security import MIN_PASSWORD_LENGTH
 
 
 class UserCreate(BaseModel):
@@ -37,6 +37,10 @@ class UserCreate(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("Le nom affiché est requis.")
+        if len(value) > MAX_DISPLAY_NAME_LENGTH:
+            raise ValueError(
+                f"Le nom affiché ne peut pas dépasser {MAX_DISPLAY_NAME_LENGTH} caractères."
+            )
         return value
 
     @field_validator("role")
