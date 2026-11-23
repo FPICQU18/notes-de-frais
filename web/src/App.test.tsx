@@ -73,6 +73,9 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/depenses") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (url.endsWith("/api/v1/notes") && methode === "GET") {
+        return jsonResponse([]);
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     },
   );
@@ -338,7 +341,9 @@ test("utilisateur : cliquer Dossiers affiche le titre et marque l'onglet actif",
   await utilisateur.click(screen.getByRole("link", { name: "Dossiers" }));
 
   expect(await screen.findByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation."),
+  ).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Dossiers" })).toHaveAttribute(
     "aria-current",
     "page",

@@ -41,6 +41,8 @@ export interface Note {
   statut: StatutNote;
   total_centimes: number;
   nb_depenses: number;
+  /** Date (`AAAA-MM-JJ`) de la dépense la plus récente du dossier, `null` si aucune. */
+  derniere_depense_le: string | null;
   created_at: string;
   updated_at: string;
 }

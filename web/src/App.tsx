@@ -6,6 +6,7 @@ import { MiseEnPage } from "./components/MiseEnPage";
 import { PageBientotDisponible } from "./components/PageBientotDisponible";
 import { DepensesPage } from "./pages/DepensesPage";
 import { DetailDepensePage } from "./pages/DetailDepensePage";
+import { DossiersPage } from "./pages/DossiersPage";
 import { EcranErreur } from "./pages/EcranErreur";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -121,7 +122,10 @@ export function AppRoutes() {
           path="/depenses/:id"
           element={<DetailDepensePage onSessionExpiree={gererDeconnexion} />}
         />
-        <Route path="/dossiers" element={<PageBientotDisponible titre="Dossiers" />} />
+        <Route
+          path="/dossiers"
+          element={<DossiersPage onSessionExpiree={gererDeconnexion} />}
+        />
         <Route
           path="/validation"
           element={

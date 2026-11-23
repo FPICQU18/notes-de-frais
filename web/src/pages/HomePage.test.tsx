@@ -42,6 +42,7 @@ function note(partiel: Partial<Note> & { id: number }): Note {
     statut: "brouillon",
     total_centimes: 0,
     nb_depenses: 0,
+    derniere_depense_le: null,
     created_at: "2026-11-15T12:00:00Z",
     updated_at: "2026-11-15T12:00:00Z",
     ...partiel,
