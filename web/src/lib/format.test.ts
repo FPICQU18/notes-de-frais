@@ -4,6 +4,7 @@ import {
   dateDuJour,
   dateIsoParis,
   formatDateCourte,
+  formatDateCourteHorodatage,
   formatDateHeure,
   formatMontant,
   initiales,
@@ -28,6 +29,17 @@ describe("formatDateCourte", () => {
 
   test("ne conserve pas de zéro initial sur le jour", () => {
     expect(formatDateCourte("2026-11-05")).toBe("5 nov.");
+  });
+});
+
+describe("formatDateCourteHorodatage", () => {
+  test("renvoie la date courte au fuseau Europe/Paris", () => {
+    expect(formatDateCourteHorodatage("2026-11-21T09:30:00Z")).toBe("21 nov.");
+  });
+
+  test("bascule au lendemain quand Paris dépasse minuit (UTC+1)", () => {
+    // 2026-11-21T23:30:00Z = 2026-11-22 00:30 à Paris.
+    expect(formatDateCourteHorodatage("2026-11-21T23:30:00Z")).toBe("22 nov.");
   });
 });
 

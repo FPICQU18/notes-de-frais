@@ -73,6 +73,9 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/depenses") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (url.includes("/api/v1/validation/notes") && methode === "GET") {
+        return jsonResponse([]);
+      }
       if (url.endsWith("/api/v1/notes") && methode === "GET") {
         return jsonResponse([]);
       }
@@ -364,7 +367,12 @@ test("valideur : Validation affiché sans Profil ; cliquer Validation affiche la
   await utilisateur.click(within(nav).getByRole("link", { name: "Validation" }));
 
   expect(await screen.findByRole("heading", { name: "Validation" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  // L'onglet « À traiter » est actif et son état vide est annoncé.
+  expect(await screen.findByRole("tab", { name: "À traiter" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(await screen.findByText("Aucun dossier à traiter.")).toBeInTheDocument();
 });
 
 test("admin : Validation affiché et Profil absent", async () => {
@@ -376,6 +384,14 @@ test("admin : Validation affiché et Profil absent", async () => {
   const nav = screen.getByRole("navigation", { name: "Navigation principale" });
   expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
+});
+
+test("valideur sur /validation/123 : page « Dossier » en attente", async () => {
+  mockApi(VALIDEUR);
+  renderApp("/validation/123");
+
+  expect(await screen.findByRole("heading", { name: "Dossier" })).toBeInTheDocument();
+  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
 });
 
 test("accueil connecté : le bouton « + » mène à la saisie d'une dépense", async () => {
