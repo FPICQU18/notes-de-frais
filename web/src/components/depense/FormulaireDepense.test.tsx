@@ -19,6 +19,8 @@ interface Options {
   maintenant?: Date;
   onSessionExpiree?: () => void;
   onSucces?: (annonce: string | null) => void;
+  onConflit?: (message: string) => void;
+  onIntrouvable?: () => void;
 }
 
 function renderFormulaire(options: Options = {}) {
@@ -31,6 +33,8 @@ function renderFormulaire(options: Options = {}) {
         maintenant={options.maintenant ?? MAINTENANT}
         onSessionExpiree={onSessionExpiree}
         onSucces={onSucces}
+        onConflit={options.onConflit}
+        onIntrouvable={options.onIntrouvable}
       />
     </MemoryRouter>,
   );
@@ -62,6 +66,8 @@ function renderFormulaireModification(options: Options & { idDepense?: number } 
         maintenant={options.maintenant ?? MAINTENANT}
         onSessionExpiree={onSessionExpiree}
         onSucces={onSucces}
+        onConflit={options.onConflit}
+        onIntrouvable={options.onIntrouvable}
       />
     </MemoryRouter>,
   );
@@ -593,4 +599,129 @@ test("modification : nouvelle photo, aucun champ modifié → pas de PATCH, PUT 
   );
   expect(methodes).not.toContain("PATCH");
   expect(methodes).toContain("PUT");
+});
+
+test("création : PUT du justificatif répond 401 → session expirée, onSucces non appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      return jsonResponse({ detail: "Authentification requise." }, 401);
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onSessionExpiree = vi.fn();
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSessionExpiree, onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("création : PUT du justificatif répond 404 → onIntrouvable appelé, onSucces non appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      return jsonResponse({ detail: "Dépense introuvable." }, 404);
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onIntrouvable = vi.fn();
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onIntrouvable, onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onIntrouvable).toHaveBeenCalled());
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("modification : PUT du justificatif répond 409 → onConflit(message), onSucces non appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1/justificatif" && method === "GET") {
+      return jsonResponse({ detail: "Introuvable" }, 404);
+    }
+    if (url === "/api/v1/depenses/1/justificatif" && method === "PUT") {
+      return jsonResponse(
+        { detail: "La dépense appartient à un dossier qui n'est pas au statut brouillon." },
+        409,
+      );
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onConflit = vi.fn();
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaireModification({ onConflit, onSucces });
+
+  expect(await screen.findByText("Aucune photo jointe")).toBeInTheDocument();
+
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  await waitFor(() =>
+    expect(onConflit).toHaveBeenCalledWith(
+      "La dépense appartient à un dossier qui n'est pas au statut brouillon.",
+    ),
+  );
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("création : PUT du justificatif répond 413 → alerte « Le justificatif ne peut pas dépasser 10 Mo. », pas de recréation", async () => {
+  let appelsPost = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      appelsPost += 1;
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      return jsonResponse({ detail: "Le justificatif ne peut pas dépasser 10 Mo." }, 413);
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Le justificatif ne peut pas dépasser 10 Mo.");
+  expect(onSucces).not.toHaveBeenCalled();
+  expect(appelsPost).toBe(1);
 });

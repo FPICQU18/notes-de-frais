@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -360,6 +360,57 @@ test("409 sur PATCH : message du serveur affiché et retour en lecture seule", a
   expect(
     screen.queryByRole("button", { name: "Enregistrer les modifications" }),
   ).not.toBeInTheDocument();
+});
+
+test("409 sur PUT du justificatif : message du serveur affiché et retour en lecture seule", async () => {
+  let appelsNote = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1" && method === "GET") {
+      return jsonResponse(depense({ id: 1, note_id: 5 }));
+    }
+    if (url === "/api/v1/notes/5" && method === "GET") {
+      appelsNote += 1;
+      return jsonResponse(
+        note({ id: 5, statut: appelsNote === 1 ? "brouillon" : "soumise" }),
+      );
+    }
+    if (url === "/api/v1/depenses/1/justificatif" && method === "GET") {
+      return jsonResponse({ detail: "Introuvable." }, 404);
+    }
+    if (url === "/api/v1/depenses/1/justificatif" && method === "PUT") {
+      return jsonResponse(
+        { detail: "La dépense appartient à un dossier qui n'est pas au statut brouillon." },
+        409,
+      );
+    }
+    return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
+  });
+  const utilisateur = userEvent.setup();
+
+  renderDetail();
+
+  // Le bloc justificatif a sondé l'absence de fichier : le formulaire est actif.
+  expect(await screen.findByText("Aucune photo jointe")).toBeInTheDocument();
+
+  const fichier = new File(["%PDF-1.4"], "ticket.pdf", { type: "application/pdf" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent(
+    "La dépense appartient à un dossier qui n'est pas au statut brouillon.",
+  );
+  expect(screen.getByLabelText("Montant")).toBeDisabled();
+  expect(
+    screen.queryByRole("button", { name: "Enregistrer les modifications" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("LISTE")).not.toBeInTheDocument();
 });
 
 test("suppression annulée : aucun DELETE émis, le formulaire reste actif", async () => {
