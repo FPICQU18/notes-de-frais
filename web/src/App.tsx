@@ -4,9 +4,12 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { ApiError, apiGet, type UserRead } from "./api/client";
 import { MiseEnPage } from "./components/MiseEnPage";
 import { PageBientotDisponible } from "./components/PageBientotDisponible";
+import { DepensesPage } from "./pages/DepensesPage";
+import { DetailDepensePage } from "./pages/DetailDepensePage";
 import { EcranErreur } from "./pages/EcranErreur";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NouvelleDepensePage } from "./pages/NouvelleDepensePage";
 
 type Etat = "chargement" | "anonyme" | "connecte" | "erreur";
 
@@ -108,11 +111,15 @@ export function AppRoutes() {
         />
         <Route
           path="/depenses"
-          element={<PageBientotDisponible titre="Dépenses" />}
+          element={<DepensesPage onSessionExpiree={gererDeconnexion} />}
         />
         <Route
           path="/depenses/nouvelle"
-          element={<PageBientotDisponible titre="Saisie d'un ticket" />}
+          element={<NouvelleDepensePage onSessionExpiree={gererDeconnexion} />}
+        />
+        <Route
+          path="/depenses/:id"
+          element={<DetailDepensePage onSessionExpiree={gererDeconnexion} />}
         />
         <Route path="/dossiers" element={<PageBientotDisponible titre="Dossiers" />} />
         <Route

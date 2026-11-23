@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from "react";
+import { Link } from "react-router";
 import {
   Bed,
   Fuel,
@@ -32,13 +34,19 @@ const CLASSE_ICONE: Record<Categorie, string> = {
   autre: "categorie-autre",
 };
 
-export function CarteDepense({ depense }: { depense: Depense }) {
+type Props = {
+  depense: Depense;
+  /** Si fourni, la carte devient un lien de navigation vers ce chemin. */
+  vers?: string;
+};
+
+function ContenuCarte({ depense }: { depense: Depense }) {
   const Icone = ICONES[depense.categorie];
   const classe = CLASSE_ICONE[depense.categorie];
   const aClasser = depense.note_id === null;
 
   return (
-    <li className="carte-depense">
+    <>
       <span className={`carte-depense__icone ${classe}`} aria-hidden="true">
         <Icone strokeWidth={2} />
       </span>
@@ -54,6 +62,35 @@ export function CarteDepense({ depense }: { depense: Depense }) {
         </p>
       </div>
       <p className="carte-depense__montant">{formatMontant(depense.montant_centimes)}</p>
+    </>
+  );
+}
+
+export function CarteDepense({ depense, vers }: Props) {
+  if (vers === undefined) {
+    return (
+      <li className="carte-depense">
+        <ContenuCarte depense={depense} />
+      </li>
+    );
+  }
+
+  function gererTouche(evenement: KeyboardEvent<HTMLAnchorElement>) {
+    if (evenement.key === " ") {
+      evenement.preventDefault();
+      evenement.currentTarget.click();
+    }
+  }
+
+  return (
+    <li className="m-0 list-none p-0">
+      <Link
+        to={vers}
+        onKeyDown={gererTouche}
+        className="carte-depense no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+      >
+        <ContenuCarte depense={depense} />
+      </Link>
     </li>
   );
 }

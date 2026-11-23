@@ -70,6 +70,9 @@ function mockApi(sessionInitiale: UserRead | null = null) {
         session = null;
         return new Response(null, { status: 204 });
       }
+      if (url.endsWith("/api/v1/depenses") && methode === "GET") {
+        return jsonResponse([]);
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     },
   );
@@ -370,7 +373,7 @@ test("admin : Validation affiché et Profil absent", async () => {
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
 });
 
-test("accueil connecté : le bouton « + » mène à la saisie d'un ticket", async () => {
+test("accueil connecté : le bouton « + » mène à la saisie d'une dépense", async () => {
   mockApi(UTILISATEUR);
   const utilisateur = userEvent.setup();
   renderApp();
@@ -378,7 +381,7 @@ test("accueil connecté : le bouton « + » mène à la saisie d'un ticket", asy
   await screen.findByRole("heading", { name: "Bonjour Camille" });
   await utilisateur.click(screen.getByRole("link", { name: "Ajouter une dépense" }));
 
-  expect(await screen.findByRole("heading", { name: "Saisie d'un ticket" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Nouvelle dépense" })).toBeInTheDocument();
 });
 
 test("utilisateur sur /validation : redirigé vers l'accueil, sans onglet Validation", async () => {
@@ -434,12 +437,12 @@ test("admin sur /profil : redirigé vers l'accueil, sans lien Profil", async () 
   expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
 });
 
-test("utilisateur sur /depenses : titre « Dépenses » et « Bientôt disponible. », onglet actif", async () => {
+test("utilisateur sur /depenses : titre « Dépenses », liste vide, onglet actif", async () => {
   mockApi(UTILISATEUR);
   renderApp("/depenses");
 
   expect(await screen.findByRole("heading", { name: "Dépenses" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(await screen.findByText("Aucune dépense pour l'instant.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Dépenses" })).toHaveAttribute(
     "aria-current",
     "page",

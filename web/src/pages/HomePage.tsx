@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Camera, ChevronRight, LogOut } from "lucide-react";
 
 import { apiPost, type Depense, type Note, type UserRead } from "../api/client";
-import { CarteDepense } from "../components/accueil/CarteDepense";
+import { CarteDepense } from "../components/depense/CarteDepense";
 import {
   dateDuJour,
   formatMontant,
