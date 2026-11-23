@@ -1,0 +1,68 @@
+import { Link } from "react-router";
+
+import type { NoteValidation, StatutValidation } from "../../api/client";
+import {
+  formatDateCourteHorodatage,
+  formatMontant,
+  initiales,
+} from "../../lib/format";
+
+const LIBELLES_STATUT: Record<StatutValidation, string> = {
+  soumise: "Soumise",
+  validee: "Validée",
+  refusee: "Refusée",
+  remboursee: "Remboursée",
+};
+
+type Props = {
+  note: NoteValidation;
+};
+
+/** Carte d'un dossier de la file de validation : demandeur, titre, date, total et statut. */
+export function CarteValidation({ note }: Props) {
+  const dateEnvoi =
+    note.soumise_at === null ? "—" : formatDateCourteHorodatage(note.soumise_at);
+
+  return (
+    <li className="m-0 list-none p-0">
+      <Link
+        to={`/validation/${note.id}`}
+        className="flex min-h-[124px] flex-col gap-2.5 rounded-[24px] bg-[var(--card)] p-[16px_18px] text-inherit no-underline shadow-[var(--ombre-carte)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] active:opacity-90"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[20px] bg-[var(--accent)] text-[13px] font-bold text-[var(--accent-foreground)]"
+            >
+              {initiales(note.proprietaire.display_name)}
+            </span>
+            <span className="truncate text-[13px] font-bold">
+              {note.proprietaire.display_name}
+            </span>
+          </div>
+          <span
+            className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold"
+            style={{
+              backgroundColor: `var(--statut-${note.statut}-fond)`,
+              color: `var(--statut-${note.statut}-texte)`,
+            }}
+          >
+            {LIBELLES_STATUT[note.statut]}
+          </span>
+        </div>
+        <p className="m-0 line-clamp-2 min-w-0 break-words text-[17px] font-extrabold leading-tight">
+          {note.libelle}
+        </p>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="m-0 text-[13px] font-semibold text-[var(--muted-foreground)]">
+            Envoyé le {dateEnvoi}
+          </p>
+          <p className="m-0 text-right text-[17px] font-extrabold tabular-nums">
+            {formatMontant(note.total_centimes)}
+          </p>
+        </div>
+      </Link>
+    </li>
+  );
+}

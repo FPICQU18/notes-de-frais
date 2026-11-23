@@ -21,6 +21,24 @@ export type StatutNote =
   | "refusee"
   | "remboursee";
 
+/** Statuts consultables dans la file de validation (jamais `brouillon`). */
+export type StatutValidation = "soumise" | "validee" | "refusee" | "remboursee";
+
+/** Entrée de la file de validation renvoyée par `GET /api/v1/validation/notes`. */
+export interface NoteValidation {
+  id: number;
+  libelle: string;
+  statut: StatutValidation;
+  total_centimes: number;
+  nb_depenses: number;
+  /** Date d'envoi en validation (horodatage UTC), `null` pour les données antérieures. */
+  soumise_at: string | null;
+  proprietaire: {
+    id: number;
+    display_name: string;
+  };
+}
+
 export interface Depense {
   id: number;
   libelle: string;

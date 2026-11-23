@@ -39,6 +39,15 @@ export function formatDateCourte(dateIso: string): string {
   }).format(new Date(Date.UTC(annee, mois - 1, jour)));
 }
 
+/** « 18 nov. » — date courte française d'un horodatage, au fuseau `Europe/Paris`. */
+export function formatDateCourteHorodatage(dateIso: string): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(dateIso));
+}
+
 /** Numéro de semaine ISO 8601 (lundi = 1 … dimanche = 7). */
 export function numeroSemaineIso(dateIso: string): number {
   const [annee, mois, jour] = dateIso.split("-").map(Number);
