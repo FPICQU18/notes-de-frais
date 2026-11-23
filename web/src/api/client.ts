@@ -50,12 +50,42 @@ export const MESSAGE_GENERIQUE = "Une erreur est survenue.";
 
 export class ApiError extends Error {
   readonly status: number;
+  /** Corps `detail` brut de la réponse d'erreur (chaîne ou tableau 422). */
+  readonly detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
+}
+
+export interface ErreurValidation {
+  /** Nom du champ concerné (dernier élément de `loc`), `null` si absent. */
+  champ: string | null;
+  message: string;
+}
+
+/**
+ * Extrait les erreurs de validation d'un corps `detail` 422 de FastAPI :
+ * `[{ loc: ["body", "montant_centimes"], msg: "…" }, …]`.
+ */
+export function erreursDeDetail(detail: unknown): ErreurValidation[] {
+  if (!Array.isArray(detail)) return [];
+  const erreurs: ErreurValidation[] = [];
+  for (const entree of detail) {
+    if (entree === null || typeof entree !== "object") continue;
+    const { loc, msg } = entree as { loc?: unknown; msg?: unknown };
+    const message = typeof msg === "string" ? msg : MESSAGE_GENERIQUE;
+    let champ: string | null = null;
+    if (Array.isArray(loc)) {
+      const dernier = loc[loc.length - 1];
+      if (typeof dernier === "string") champ = dernier;
+    }
+    erreurs.push({ champ, message });
+  }
+  return erreurs;
 }
 
 type DetailValidation = { msg?: unknown };
@@ -79,42 +109,28 @@ function messageDepuisDetail(detail: unknown): string {
   return MESSAGE_GENERIQUE;
 }
 
-async function messageErreur(response: Response): Promise<string> {
+async function lireErreur(
+  response: Response,
+): Promise<{ message: string; detail: unknown }> {
   try {
     const corps = (await response.json()) as CorpsErreur;
     if (corps !== null && typeof corps === "object" && "detail" in corps) {
-      return messageDepuisDetail(corps.detail);
+      return { message: messageDepuisDetail(corps.detail), detail: corps.detail };
     }
   } catch {
     // Corps non JSON : on retombe sur le message générique.
   }
-  return MESSAGE_GENERIQUE;
+  return { message: MESSAGE_GENERIQUE, detail: undefined };
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+async function requete<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    });
-  } catch {
-    throw new ApiError(0, MESSAGE_RESEAU);
-  }
-  if (!response.ok) {
-    throw new ApiError(response.status, await messageErreur(response));
-  }
-  return (await response.json()) as T;
-}
-
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`/api${path}`, {
-      method: "POST",
+      method,
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       credentials: "same-origin",
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -123,11 +139,28 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     throw new ApiError(0, MESSAGE_RESEAU);
   }
   if (!response.ok) {
-    throw new ApiError(response.status, await messageErreur(response));
+    const { message, detail } = await lireErreur(response);
+    throw new ApiError(response.status, message, detail);
   }
-  // 204 No Content (logout) : pas de corps à lire.
+  // 204 No Content : pas de corps à lire.
   if (response.status === 204) {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+export function apiGet<T>(path: string): Promise<T> {
+  return requete<T>("GET", path);
+}
+
+export function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  return requete<T>("POST", path, body);
+}
+
+export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
+  return requete<T>("PATCH", path, body);
+}
+
+export function apiDelete(path: string): Promise<void> {
+  return requete<void>("DELETE", path);
 }

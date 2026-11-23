@@ -3,7 +3,9 @@ import { afterEach, expect, test, vi } from "vitest";
 import {
   MESSAGE_GENERIQUE,
   MESSAGE_RESEAU,
+  apiDelete,
   apiGet,
+  apiPatch,
   apiPost,
 } from "./client";
 
@@ -92,5 +94,32 @@ test("apiGet envoie credentials same-origin", async () => {
   await apiGet("/v1/auth/me");
 
   const [, init] = fetchMock.mock.calls[0];
+  expect(init?.credentials).toBe("same-origin");
+});
+
+test("apiPatch envoie la méthode PATCH avec le corps JSON", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ id: 1 }), { status: 200 }),
+  );
+
+  await apiPatch("/v1/depenses/1", { libelle: "Nouveau" });
+
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toBe("/api/v1/depenses/1");
+  expect(init?.method).toBe("PATCH");
+  expect(init?.headers).toMatchObject({ "Content-Type": "application/json" });
+  expect(JSON.parse(String(init?.body))).toEqual({ libelle: "Nouveau" });
+});
+
+test("apiDelete envoie la méthode DELETE et traite un 204 sans lire le corps", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(null, { status: 204 }),
+  );
+
+  await expect(apiDelete("/v1/depenses/1")).resolves.toBeUndefined();
+
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toBe("/api/v1/depenses/1");
+  expect(init?.method).toBe("DELETE");
   expect(init?.credentials).toBe("same-origin");
 });

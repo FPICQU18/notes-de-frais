@@ -62,6 +62,23 @@ export function moisCourant(maintenant: Date): { annee: number; mois: number } {
   return { annee, mois };
 }
 
+/**
+ * Date du jour au format `AAAA-MM-JJ`, dans le fuseau `Europe/Paris` (pas UTC).
+ * À 00 h 30 heure de Paris, renvoie bien la date du jour, pas la veille.
+ */
+export function dateIsoParis(maintenant: Date): string {
+  const parties = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(maintenant);
+  const annee = parties.find((partie) => partie.type === "year")?.value ?? "";
+  const mois = parties.find((partie) => partie.type === "month")?.value ?? "";
+  const jour = parties.find((partie) => partie.type === "day")?.value ?? "";
+  return `${annee}-${mois}-${jour}`;
+}
+
 export function nomMois(mois: number): string {
   return MOIS[mois - 1] ?? "";
 }

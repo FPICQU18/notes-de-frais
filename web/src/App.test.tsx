@@ -70,6 +70,9 @@ function mockApi(sessionInitiale: UserRead | null = null) {
         session = null;
         return new Response(null, { status: 204 });
       }
+      if (url.endsWith("/api/v1/depenses") && methode === "GET") {
+        return jsonResponse([]);
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     },
   );
@@ -370,7 +373,7 @@ test("admin : Validation affiché et Profil absent", async () => {
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
 });
 
-test("accueil connecté : le bouton « + » mène à la saisie d'un ticket", async () => {
+test("accueil connecté : le bouton « + » mène à la saisie d'une dépense", async () => {
   mockApi(UTILISATEUR);
   const utilisateur = userEvent.setup();
   renderApp();
@@ -378,7 +381,7 @@ test("accueil connecté : le bouton « + » mène à la saisie d'un ticket", asy
   await screen.findByRole("heading", { name: "Bonjour Camille" });
   await utilisateur.click(screen.getByRole("link", { name: "Ajouter une dépense" }));
 
-  expect(await screen.findByRole("heading", { name: "Saisie d'un ticket" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Nouvelle dépense" })).toBeInTheDocument();
 });
 
 test("utilisateur sur /validation : redirigé vers l'accueil, sans onglet Validation", async () => {
@@ -434,12 +437,12 @@ test("admin sur /profil : redirigé vers l'accueil, sans lien Profil", async () 
   expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
 });
 
-test("utilisateur sur /depenses : titre « Dépenses » et « Bientôt disponible. », onglet actif", async () => {
+test("utilisateur sur /depenses : titre « Dépenses », liste vide, onglet actif", async () => {
   mockApi(UTILISATEUR);
   renderApp("/depenses");
 
   expect(await screen.findByRole("heading", { name: "Dépenses" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(await screen.findByText("Aucune dépense pour l'instant.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Dépenses" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -464,3 +467,37 @@ test("focus du h1 à l'arrivée sur une page vide après clic sur Dossiers", asy
 
   expect(await screen.findByRole("heading", { name: "Dossiers" })).toHaveFocus();
 });
+
+test.each([
+  [UTILISATEUR, "/depenses"],
+  [UTILISATEUR, "/depenses/nouvelle"],
+  [UTILISATEUR, "/depenses/1"],
+  [VALIDEUR, "/depenses"],
+  [VALIDEUR, "/depenses/nouvelle"],
+  [VALIDEUR, "/depenses/1"],
+  [ADMIN, "/depenses"],
+  [ADMIN, "/depenses/nouvelle"],
+  [ADMIN, "/depenses/1"],
+])(
+  "barre de navigation présente et utilisable sur %s pour %s",
+  async (utilisateur, url) => {
+    mockApi(utilisateur);
+    renderApp(url);
+
+    const nav = await screen.findByRole("navigation", {
+      name: "Navigation principale",
+    });
+    expect(within(nav).getByRole("link", { name: "Accueil" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Dépenses" })).toBeInTheDocument();
+    expect(
+      within(nav).getByRole("link", { name: "Ajouter une dépense" }),
+    ).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Dossiers" })).toBeInTheDocument();
+
+    if (utilisateur.role === "utilisateur") {
+      expect(within(nav).getByRole("link", { name: "Profil" })).toBeInTheDocument();
+    } else {
+      expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
+    }
+  },
+);
