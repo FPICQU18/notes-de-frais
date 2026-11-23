@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   dateDuJour,
+  dateIsoParis,
   formatDateCourte,
   formatMontant,
   initiales,
@@ -104,6 +105,22 @@ describe("totalDepensesMois", () => {
       ),
     ).toBe(0);
     expect(totalDepensesMois([], maintenant)).toBe(0);
+  });
+});
+
+describe("dateIsoParis", () => {
+  test("à 00 h 30 heure de Paris, renvoie la date du jour (pas la veille)", () => {
+    // 2026-11-23T23:30:00Z = 2026-11-24 00:30 en heure de Paris (UTC+1)
+    expect(dateIsoParis(new Date("2026-11-23T23:30:00Z"))).toBe("2026-11-24");
+  });
+
+  test("en pleine journée UTC, renvoie la date de Paris", () => {
+    expect(dateIsoParis(new Date("2026-11-23T10:00:00Z"))).toBe("2026-11-23");
+  });
+
+  test("en été (UTC+2), 22 h 30 UTC est le lendemain à Paris", () => {
+    // 2026-07-15T22:30:00Z = 2026-07-16 00:30 en heure de Paris (UTC+2)
+    expect(dateIsoParis(new Date("2026-07-15T22:30:00Z"))).toBe("2026-07-16");
   });
 });
 
