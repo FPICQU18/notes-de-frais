@@ -642,14 +642,29 @@ def _aucune_cle(donnees, cles: set[str]) -> bool:
     return True
 
 
+def _sans_updated_at(donnees):
+    """Retire récursivement les champs `updated_at` (volatils) d'un JSON.
+
+    Sert à comparer les réponses de liste/détail avant et après un remplacement
+    du justificatif : seul `updated_at` de la note varie (le dossier est repassé
+    en brouillon puis re-soumis pour permettre l'envoi), sans aucun lien avec la
+    taille du fichier. `created_at` reste stable, on le conserve.
+    """
+    if isinstance(donnees, dict):
+        return {
+            cle: _sans_updated_at(valeur) for cle, valeur in donnees.items() if cle != "updated_at"
+        }
+    if isinstance(donnees, list):
+        return [_sans_updated_at(element) for element in donnees]
+    return donnees
+
+
 def test_pas_de_fuite_octets_dans_listes_et_details(client, db_session):
     user = _connect(client, db_session)  # propriétaire : jean@example.com
     _make_user(db_session, email="valideur@example.com", role="valideur")
     note = _make_note(db_session, user)
     depense = _make_depense(db_session, user, note_id=note.id)
     assert _upload(client, depense.id, PNG).status_code == 200
-    note.statut = "soumise"
-    db_session.commit()
 
     routes_owner = (
         "/api/v1/depenses",
@@ -672,22 +687,32 @@ def test_pas_de_fuite_octets_dans_listes_et_details(client, db_session):
         _login(client, "jean@example.com")  # repasser propriétaire
         return resultats
 
+    # Lecture de référence : dossier soumis, justificatif de petite taille.
+    note.statut = "soumise"
+    db_session.commit()
     petit = lire_toutes_les_routes()
 
-    # Remplacement par un justificatif proche de la limite de 10 Mo : les 4 routes
-    # doivent renvoyer exactement le même JSON (mêmes clés, aucune `donnees`) et le
-    # même contenu — la taille des réponses ne dépend donc pas de celle du fichier.
+    # Remplacement par un justificatif proche de 10 Mo : l'envoi exige un dossier
+    # au statut brouillon, donc on repasse brouillon le temps de l'envoi puis on
+    # re-soumet pour relire la file de validation dans les mêmes conditions.
+    note.statut = "brouillon"
+    db_session.commit()
     gros = b"\x89PNG\r\n\x1a\n" + b"0" * (MAX_TAILLE - len(b"\x89PNG\r\n\x1a\n"))
     assert len(gros) == MAX_TAILLE
     assert _upload(client, depense.id, gros).status_code == 200
-
+    note.statut = "soumise"
+    db_session.commit()
     grand = lire_toutes_les_routes()
 
     for url in (*routes_owner, route_validation):
         json_petit, contenu_petit = petit[url]
         json_grand, contenu_grand = grand[url]
-        assert json_grand == json_petit
-        assert contenu_grand == contenu_petit
+        # Même JSON, aux seuls champs `updated_at` près (volatils par nature) : la
+        # taille du justificatif ne change rien aux listes et aux détails.
+        assert _sans_updated_at(json_grand) == _sans_updated_at(json_petit)
+        # La taille de la réponse ne dépend pas de celle du fichier.
+        assert len(contenu_grand) == len(contenu_petit)
+        # Aucune clé `donnees`/`justificatif`, aucun octet ne transite.
         assert _aucune_cle(json_grand, {"donnees", "justificatif"})
         assert PNG not in contenu_grand
         assert gros not in contenu_grand
