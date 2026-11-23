@@ -108,7 +108,10 @@ export function DossiersPage({ onSessionExpiree }: Props) {
           </div>
         )}
 
-        {!dossiers.chargement && dossiers.erreur === null && liste.length > 0 && (
+        {/* La liste est pilotée par la seule présence de données : une erreur
+            (ou un rechargement) survenant alors que des dossiers sont déjà
+            affichés ne les fait pas disparaître. */}
+        {liste.length > 0 && (
           <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
             {liste.map((note) => (
               <CarteDossier key={note.id} note={note} />
