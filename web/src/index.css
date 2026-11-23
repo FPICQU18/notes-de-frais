@@ -1,22 +1,87 @@
+@import "tailwindcss";
+
+/*
+  Thème « Doux & arrondi » (direction B) — valeurs issues d'AGENTS.md.
+  Aucune couleur hors du tableau de la charte n'est introduite ici.
+*/
+
 :root {
   color-scheme: light;
 
-  /* Couleurs — rapport de contraste mesuré sur #ffffff */
-  --couleur-texte: #1f2328;             /* 15,8:1 */
-  --couleur-texte-secondaire: #57606a;  /*  6,4:1 (6,0:1 sur #f6f8fa) */
-  --couleur-fond: #ffffff;
-  --couleur-surface: #f6f8fa;
-  --couleur-bordure: #d0d7de;           /* séparateurs décoratifs uniquement */
-  --couleur-bordure-champ: #6e7781;     /*  4,6:1 — limite de composant */
-  --couleur-primaire: #1f6feb;          /*  4,6:1 sur blanc, = theme_color du manifeste */
-  --couleur-primaire-survol: #1a5fd0;   /*  5,9:1 */
-  --couleur-primaire-actif: #1559c7;    /*  6,4:1 */
-  --couleur-sur-primaire: #ffffff;      /*  4,6:1 sur #1f6feb */
-  --couleur-erreur: #b42318;            /*  6,6:1 sur blanc, 6,1:1 sur #fef3f2 */
-  --couleur-erreur-fond: #fef3f2;
-  --couleur-focus: #1f6feb;             /*  4,6:1 sur blanc, 4,4:1 sur #f6f8fa */
+  /* ---- Palette de base (AGENTS.md, section Design) ---- */
+  --background: #F3F4FF; /* fond de page */
+  --foreground: #1A1A2E; /* texte principal */
+  --card: #FFFFFF; /* cartes, surfaces */
+  --card-foreground: #1A1A2E;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1A2E;
 
-  /* Espacements — pas de 4 px */
+  --primary: #5B3DF5; /* primaire (boutons, bandeau, onglet actif) */
+  --primary-foreground: #FFFFFF; /* texte sur primaire */
+  --secondary: #F3F4FF; /* champs, boutons secondaires */
+  --secondary-foreground: #1A1A2E;
+
+  --muted: #F3F4FF; /* surfaces atténuées */
+  --muted-foreground: #565A73; /* texte secondaire */
+  --accent: #EDE9FF; /* primaire pâle (fond) */
+  --accent-foreground: #3A22B0; /* primaire pâle (texte) */
+
+  --destructive: #9F1239; /* erreur (texte) */
+  --destructive-foreground: #FFFFFF;
+
+  --border: #F1F2F6;
+  --input: #F3F4FF;
+  --ring: #5B3DF5;
+
+  /* Alias métier (noms en français) */
+  --primaire-fonce: #4A2FD6; /* liens, texte d'accent */
+  --primaire-pale-fond: #EDE9FF;
+  --primaire-pale-texte: #3A22B0;
+  --erreur-fond: #FFE4E6;
+  --erreur-texte: #9F1239;
+
+  /* ---- Catégories (fond / icône) ---- */
+  --categorie-transport-fond: #E4E7FF;
+  --categorie-transport-texte: #3A22B0;
+  --categorie-repas-fond: #FFE8D6;
+  --categorie-repas-texte: #9A3F0B;
+  --categorie-hebergement-fond: #EFEAFF;
+  --categorie-hebergement-texte: #4A2FD6;
+  --categorie-peage-parking-fond: #DDF6E8;
+  --categorie-peage-parking-texte: #146C3C;
+  --categorie-carburant-fond: #FFF1D6;
+  --categorie-carburant-texte: #7A4A00;
+  --categorie-fournitures-fond: #E0F2FE;
+  --categorie-fournitures-texte: #075985;
+  --categorie-autre-fond: #F1F2F6;
+  --categorie-autre-texte: #565A73;
+
+  /* ---- Statuts de dossier ---- */
+  --statut-brouillon-fond: #FFF1D6;
+  --statut-brouillon-texte: #7A4A00;
+  --statut-soumise-fond: #E4E7FF;
+  --statut-soumise-texte: #3A22B0;
+  --statut-validee-fond: #DDF6E8;
+  --statut-validee-texte: #146C3C;
+  --statut-refusee-fond: #FFE4E6;
+  --statut-refusee-texte: #9F1239;
+  --statut-remboursee-fond: #E0F2FE;
+  --statut-remboursee-texte: #075985;
+
+  /* ---- Rayons ---- */
+  --radius: 20px; /* boutons et champs (18–20 px) */
+  --rayon-carte: 24px; /* cartes (22–28 px) */
+  --rayon-bulle: 16px; /* bulles d'icône */
+  --rayon-pastille: 999px; /* pastilles */
+  --rayon-navigation: 26px; /* barre de navigation */
+  --rayon-bouton-flottant: 18px; /* bouton central « + » */
+
+  /* ---- Ombres ---- */
+  --ombre-carte: 0 6px 18px rgba(40, 30, 120, 0.06);
+  --ombre-bouton-flottant: 0 10px 24px rgba(91, 61, 245, 0.35);
+  --ombre-navigation: 0 10px 30px rgba(40, 30, 120, 0.12); /* barre de navigation (maquette) */
+
+  /* ---- Espacements ---- */
   --espace-1: 0.25rem;
   --espace-2: 0.5rem;
   --espace-3: 0.75rem;
@@ -25,39 +90,67 @@
   --espace-6: 2rem;
   --espace-7: 3rem;
 
-  /* Typographie — police système, aucune police externe */
-  --police: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* ---- Typographie ---- */
+  --police: "Plus Jakarta Sans", system-ui, sans-serif;
   --taille-titre: 1.5rem;
   --taille-corps: 1rem;
   --taille-petit: 0.875rem;
+  --taille-libelle: 0.8125rem;
   --hauteur-ligne-titre: 1.25;
   --hauteur-ligne: 1.5;
 
-  /* Rayons */
-  --rayon-champ: 0.5rem;
-  --rayon-bouton: 0.5rem;
-  --rayon-encart: 0.5rem;
-
-  /* Cibles tactiles */
+  /* ---- Cibles tactiles ---- */
   --cible-min: 2.75rem;
-  --hauteur-champ: 3rem;
+  --hauteur-champ: 3.25rem; /* 52 px */
 }
 
-*,
-*::before,
-*::after { box-sizing: border-box; }
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-body {
-  margin: 0;
-  font-family: var(--police);
-  font-size: var(--taille-corps);
-  line-height: var(--hauteur-ligne);
-  color: var(--couleur-texte);
-  background: var(--couleur-fond);
-  -webkit-text-size-adjust: 100%;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ---------------------------------------------------------------- écran */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--police);
+    font-size: var(--taille-corps);
+    line-height: var(--hauteur-ligne);
+    font-weight: 400;
+    color: var(--foreground);
+    background: var(--background);
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* ================================================================== écran */
 .ecran {
   display: flex;
   flex-direction: column;
@@ -68,46 +161,128 @@ body {
   min-height: 100svh;
 }
 
-/* écrans courts (chargement, erreur de chargement) : centrés verticalement */
-.ecran--centre { justify-content: center; }
+.ecran--centre {
+  justify-content: center;
+}
 
-/* connexion : centrée verticalement, sans jamais rogner le haut du contenu */
-.ecran--connexion { justify-content: center; }
+.ecran--connexion {
+  justify-content: center;
+}
 
-/* accueil : contenu en haut, c'est une page de travail */
-.ecran--accueil { padding-top: var(--espace-6); }
+.ecran--accueil {
+  padding-top: var(--espace-6);
+}
 
-/* ---------------------------------------------------------- typographie */
+/* ========================================================== mise en page */
+.mise-en-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  max-width: 26rem;
+  margin-inline: auto;
+}
+
+.mise-en-page__contenu {
+  flex: 1;
+  padding-bottom: 7.5rem; /* dégagement pour la barre de navigation flottante */
+}
+
+.mise-en-page__contenu .ecran {
+  min-height: 0;
+}
+
+/* ====================================================== barre navigation */
+.barre-navigation {
+  position: fixed;
+  bottom: 1rem; /* 16 px */
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  width: calc(100% - 2rem);
+  max-width: 24rem; /* 384 px */
+  height: 68px;
+  padding: 0 0.25rem;
+  background: var(--card);
+  border-radius: var(--rayon-navigation);
+  box-shadow: var(--ombre-navigation);
+  z-index: 10;
+}
+
+.barre-navigation__lien {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 3.25rem; /* ≥ 44 px */
+  color: var(--muted-foreground);
+  border-radius: var(--rayon-bulle);
+  text-decoration: none;
+}
+
+.barre-navigation__lien--actif {
+  color: var(--primary);
+}
+
+.barre-navigation__plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.barre-navigation__lien-plus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem; /* 56 px */
+  height: 3.5rem; /* 56 px */
+  margin-top: -1.5rem; /* fait dépasser le bouton au-dessus de la barre */
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: var(--rayon-bouton-flottant);
+  box-shadow: var(--ombre-bouton-flottant);
+}
+
+.barre-navigation__lien-plus:hover {
+  background: var(--primaire-fonce);
+}
+
+/* ========================================================== typographie */
 .marque {
   margin: 0 0 var(--espace-6);
   font-size: var(--taille-corps);
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: var(--couleur-primaire);
+  color: var(--primaire-fonce);
 }
 
 .titre {
   margin: 0;
   font-size: var(--taille-titre);
   line-height: var(--hauteur-ligne-titre);
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.01em;
   overflow-wrap: break-word;
 }
 
 .titre + .intro,
-.titre + .texte-secondaire { margin-top: var(--espace-2); }
+.titre + .texte-secondaire {
+  margin-top: var(--espace-2);
+}
 
 .intro,
 .texte-secondaire {
   margin: 0 0 var(--espace-5);
-  color: var(--couleur-texte-secondaire);
+  color: var(--muted-foreground);
   overflow-wrap: break-word;
 }
 
-.texte-secondaire { margin-bottom: 0; font-size: var(--taille-petit); }
+.texte-secondaire {
+  margin-bottom: 0;
+  font-size: var(--taille-petit);
+}
 
-/* ---------------------------------------------------- barre d'en-tête */
+/* ==================================================== barre d'en-tête */
 .barre {
   display: flex;
   flex-wrap: wrap;
@@ -117,10 +292,15 @@ body {
   margin-bottom: var(--espace-5);
 }
 
-.barre .marque { margin: 0; }
-.barre .bouton { margin-left: auto; }
+.barre .marque {
+  margin: 0;
+}
 
-/* ---------------------------------------------------------- formulaire */
+.barre .bouton {
+  margin-left: auto;
+}
+
+/* ========================================================== formulaire */
 .formulaire {
   display: flex;
   flex-direction: column;
@@ -128,8 +308,9 @@ body {
   margin: 0;
 }
 
-/* l'action principale est détachée des champs : 24 px au lieu de 16 px */
-.formulaire > .bouton { margin-top: var(--espace-2); }
+.formulaire > .bouton {
+  margin-top: var(--espace-2);
+}
 
 .champ {
   display: flex;
@@ -138,33 +319,36 @@ body {
 }
 
 .champ label {
-  font-size: var(--taille-corps);
-  font-weight: 600;
+  font-size: var(--taille-libelle);
+  font-weight: 700;
 }
 
 .champ input {
   width: 100%;
   min-height: var(--hauteur-champ);
-  padding: var(--espace-2) var(--espace-3);
+  padding: var(--espace-2) var(--espace-4);
   font: inherit;
-  color: var(--couleur-texte);
-  background: var(--couleur-fond);
-  border: 1px solid var(--couleur-bordure-champ);
-  border-radius: var(--rayon-champ);
+  color: var(--foreground);
+  background: var(--secondary);
+  border: none;
+  border-radius: var(--radius);
 }
 
-.champ input:hover { border-color: var(--couleur-texte); }
+.champ input[type="password"] {
+  letter-spacing: 0.05em;
+}
 
-/* champ en erreur : bordure rouge de 2 px, sans décalage de mise en page */
+.champ input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .champ input[aria-invalid="true"] {
-  border-color: var(--couleur-erreur);
-  border-width: 2px;
-  padding: calc(var(--espace-2) - 1px) calc(var(--espace-3) - 1px);
+  outline: 2px solid var(--erreur-texte);
+  outline-offset: 0;
 }
 
-.champ input[type="password"] { letter-spacing: 0.05em; }
-
-/* -------------------------------------------------------------- boutons */
+/* ============================================================== boutons */
 .bouton {
   display: inline-flex;
   align-items: center;
@@ -173,104 +357,459 @@ body {
   min-height: var(--cible-min);
   padding: var(--espace-3) var(--espace-4);
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
-  border: 1px solid transparent;
-  border-radius: var(--rayon-bouton);
+  border: none;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
 .bouton--primaire {
   min-height: var(--hauteur-champ);
-  background: var(--couleur-primaire);
-  color: var(--couleur-sur-primaire);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
-.bouton--primaire:hover:not(:disabled) { background: var(--couleur-primaire-survol); }
-.bouton--primaire:active:not(:disabled) { background: var(--couleur-primaire-actif); }
+
+.bouton--primaire:hover:not(:disabled),
+.bouton--primaire:active:not(:disabled) {
+  background: var(--primaire-fonce);
+}
 
 .bouton--secondaire {
-  background: var(--couleur-fond);
-  color: var(--couleur-texte);
-  border-color: var(--couleur-bordure-champ);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
 }
-.bouton--secondaire:hover:not(:disabled) { background: var(--couleur-surface); }
 
-/* action secondaire de barre : plus compacte, mais toujours >= 44 px de haut */
+.bouton--secondaire:hover:not(:disabled) {
+  background: var(--accent);
+}
+
 .bouton--discret {
   width: auto;
   min-height: var(--cible-min);
   padding: var(--espace-2);
   font-size: var(--taille-petit);
-  background: var(--couleur-fond);
-  color: var(--couleur-texte);
-  border-color: var(--couleur-bordure-champ);
+  font-weight: 600;
+  background: transparent;
+  color: var(--primaire-fonce);
 }
-.bouton--discret:hover:not(:disabled) { background: var(--couleur-surface); }
+
+.bouton--discret:hover:not(:disabled) {
+  background: var(--accent);
+}
 
 .bouton:disabled {
-  background: var(--couleur-surface);
-  color: var(--couleur-texte-secondaire);
-  border-color: var(--couleur-bordure);
+  background: var(--muted);
+  color: var(--muted-foreground);
   cursor: not-allowed;
 }
 
-/* ------------------------------------------------------- encart d'erreur */
+/* ======================================================= encart d'erreur */
 .alerte {
   margin: 0 0 var(--espace-5);
   padding: var(--espace-3) var(--espace-4);
-  background: var(--couleur-erreur-fond);
-  /* filet gauche en box-shadow (et non en border-left) : il suit l'arrondi
-     de l'encart au lieu de déborder aux extrémités */
-  box-shadow: inset 4px 0 0 var(--couleur-erreur);
-  border-radius: var(--rayon-encart);
-  color: var(--couleur-erreur);
+  background: var(--erreur-fond);
+  border-radius: var(--rayon-bulle);
+  color: var(--erreur-texte);
   overflow-wrap: anywhere;
 }
 
-/* le titre et l'encart d'erreur ne se touchent jamais */
-.titre + .alerte { margin-top: var(--espace-4); }
+.titre + .alerte {
+  margin-top: var(--espace-4);
+}
 
-/* ---------------------------------------------------- texte de chargement */
+/* ==================================================== texte de chargement */
 .chargement {
   margin: 0;
-  color: var(--couleur-texte-secondaire);
+  color: var(--muted-foreground);
   text-align: center;
 }
 
-/* sur l'accueil, le texte suit l'alignement à gauche du titre */
-.chargement--accueil { text-align: left; }
+.chargement--accueil {
+  text-align: left;
+}
 
-/* --------------------------------------------------------------- actions */
+/* =============================================================== actions */
 .actions {
   display: flex;
   flex-direction: column;
   gap: var(--espace-3);
-  /* 8 px, qui s'ajoutent aux 24 px sous l'encart d'erreur : 32 px au total */
   margin-top: var(--espace-2);
 }
 
-/* ----------------------------------------------------------- focus visible
-   :focus-visible pour la navigation clavier ; :focus pour les cibles
-   focalisées par programme (alertes tabIndex={-1}). */
+/* ============================================================ focus */
 .bouton:focus-visible,
-.champ input:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--couleur-focus);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-/* alerte focalisée par programme (échec de connexion) : anneau rouge collé à
-   l'encart. Un anneau bleu la ferait passer pour un élément cliquable. */
+.barre-navigation__lien:focus-visible,
+.barre-navigation__lien-plus:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .alerte:focus {
-  outline: 2px solid var(--couleur-erreur);
+  outline: 2px solid var(--erreur-texte);
   outline-offset: 0;
 }
 
-/* titre focalisé par programme : aucun anneau, il n'est pas interactif ;
-   le focus sert seulement à positionner le lecteur d'écran. */
-.titre:focus { outline: none; }
+.titre:focus {
+  outline: none;
+}
 
-/* ------------------------------------------------------------ adaptation */
+/* ============================================================ adaptation */
 @media (min-width: 30rem) {
-  .ecran { padding-inline: var(--espace-5); }
+  .ecran {
+    padding-inline: var(--espace-5);
+  }
+}
+
+/* ===================================================== accueil (US-016) */
+
+.accueil-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-3);
+  margin-bottom: var(--espace-5);
+}
+
+.accueil-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: var(--taille-petit);
+  font-weight: 800;
+}
+
+.accueil-entete__identite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.accueil-entete__date {
+  margin: 0;
+  font-size: var(--taille-libelle);
+  color: var(--muted-foreground);
+}
+
+.accueil-entete__titre {
+  margin: 0;
+  font-size: var(--taille-titre);
+  line-height: var(--hauteur-ligne-titre);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+}
+
+.accueil-entete__titre:focus {
+  outline: none;
+}
+
+.accueil-deconnexion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--cible-min);
+  height: var(--cible-min);
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primaire-fonce);
+  cursor: pointer;
+}
+
+.accueil-deconnexion:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.accueil-deconnexion:disabled {
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+}
+
+.accueil-deconnexion:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ---- bandeau primaire du mois ---- */
+
+.accueil-bandeau {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-4);
+  padding: 22px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: 28px;
+}
+
+.accueil-bandeau__libelle {
+  margin: 0;
+  font-size: var(--taille-petit);
+  font-weight: 600;
+}
+
+.accueil-bandeau__montant {
+  margin: 0;
+  font-size: 38px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.accueil-pastilles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+}
+
+.accueil-pastille {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-min);
+  padding: var(--espace-2) var(--espace-3);
+  border-radius: var(--rayon-pastille);
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--primary-foreground);
+  font-size: var(--taille-libelle);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.accueil-pastille:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.accueil-pastille:focus-visible {
+  outline: 2px solid var(--primary-foreground);
+  outline-offset: 2px;
+}
+
+.accueil-scanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espace-2);
+  min-height: var(--hauteur-champ);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--primaire-fonce);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.accueil-scanner:hover {
+  background: var(--accent);
+}
+
+.accueil-scanner:focus-visible {
+  outline: 2px solid var(--primary-foreground);
+  outline-offset: 2px;
+}
+
+/* ---- section « Récentes » ---- */
+
+.accueil-recentes {
+  margin-top: var(--espace-5);
+}
+
+.accueil-recentes__entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-2);
+  margin-bottom: var(--espace-3);
+}
+
+.accueil-recentes__titre {
+  margin: 0;
+  font-size: var(--taille-petit);
+  font-weight: 800;
+}
+
+.accueil-recentes__tout-voir {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-1);
+  min-height: var(--cible-min);
+  padding: var(--espace-2);
+  color: var(--primaire-fonce);
+  font-size: var(--taille-petit);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.accueil-recentes__tout-voir:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.accueil-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carte-depense {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-3);
+  padding: var(--espace-3);
+  background: var(--card);
+  border-radius: 22px;
+  box-shadow: var(--ombre-carte);
+}
+
+.carte-depense__icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--rayon-bulle);
+}
+
+.carte-depense__icone.categorie-transport {
+  background: var(--categorie-transport-fond);
+  color: var(--categorie-transport-texte);
+}
+
+.carte-depense__icone.categorie-repas {
+  background: var(--categorie-repas-fond);
+  color: var(--categorie-repas-texte);
+}
+
+.carte-depense__icone.categorie-hebergement {
+  background: var(--categorie-hebergement-fond);
+  color: var(--categorie-hebergement-texte);
+}
+
+.carte-depense__icone.categorie-carburant {
+  background: var(--categorie-carburant-fond);
+  color: var(--categorie-carburant-texte);
+}
+
+.carte-depense__icone.categorie-peage-parking {
+  background: var(--categorie-peage-parking-fond);
+  color: var(--categorie-peage-parking-texte);
+}
+
+.carte-depense__icone.categorie-fournitures {
+  background: var(--categorie-fournitures-fond);
+  color: var(--categorie-fournitures-texte);
+}
+
+.carte-depense__icone.categorie-autre {
+  background: var(--categorie-autre-fond);
+  color: var(--categorie-autre-texte);
+}
+
+.carte-depense__corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+  flex: 1;
+  min-width: 0;
+}
+
+.carte-depense__libelle {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.carte-depense__detail {
+  margin: 0;
+  font-size: var(--taille-libelle);
+  color: var(--muted-foreground);
+}
+
+.carte-depense__a-classer {
+  color: var(--primaire-fonce);
+  font-weight: 600;
+}
+
+.carte-depense__montant {
+  margin: 0;
+  flex-shrink: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- états vide / erreur de l'accueil ---- */
+
+.accueil-vide {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+
+.accueil-erreur {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-3);
+}
+
+.accueil-erreur .alerte {
+  margin-bottom: 0;
+}
+
+.accueil-erreur-compacte {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-3);
+  margin-top: var(--espace-4);
+  padding: var(--espace-3);
+  background: var(--erreur-fond);
+  border-radius: var(--rayon-bulle);
+}
+
+.accueil-erreur-compacte__texte {
+  margin: 0;
+  color: var(--erreur-texte);
+  font-size: var(--taille-libelle);
+  overflow-wrap: anywhere;
+}
+
+.accueil-retenter {
+  flex-shrink: 0;
+  min-height: var(--cible-min);
+  padding: var(--espace-2);
+  border: none;
+  border-radius: var(--rayon-bulle);
+  background: transparent;
+  color: var(--erreur-texte);
+  font: inherit;
+  font-size: var(--taille-petit);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accueil-retenter:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.accueil-retenter:focus-visible {
+  outline: 2px solid var(--erreur-texte);
+  outline-offset: 2px;
 }

@@ -19,4 +19,12 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Les composants shadcn/ui exportent leurs variantes (cva) à côté du
+    // composant : la règle react-refresh ne s'applique pas à ces fichiers.
+    files: ['src/components/ui/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

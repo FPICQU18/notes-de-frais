@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { ApiError, apiGet, type UserRead } from "./api/client";
+import { MiseEnPage } from "./components/MiseEnPage";
+import { PageBientotDisponible } from "./components/PageBientotDisponible";
 import { EcranErreur } from "./pages/EcranErreur";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 
 type Etat = "chargement" | "anonyme" | "connecte" | "erreur";
 
-export default function App() {
+export function AppRoutes() {
   const [etat, setEtat] = useState<Etat>("chargement");
   const [utilisateur, setUtilisateur] = useState<UserRead | null>(null);
   const [messageErreur, setMessageErreur] = useState("");
@@ -69,14 +72,80 @@ export default function App() {
   }
 
   if (etat === "anonyme") {
-    return <LoginPage onConnecte={gererConnexion} focusTitre={focusTitre} />;
+    return (
+      <Routes>
+        <Route
+          path="/connexion"
+          element={<LoginPage onConnecte={gererConnexion} focusTitre={focusTitre} />}
+        />
+        <Route path="*" element={<Navigate to="/connexion" replace />} />
+      </Routes>
+    );
   }
 
+  // L'état « connecte » n'est atteint qu'avec un utilisateur chargé ; on
+  // resserre le type pour le reste du rendu.
+  if (utilisateur === null) {
+    return null;
+  }
+
+  const estValideur =
+    utilisateur.role === "valideur" || utilisateur.role === "admin";
+
   return (
-    <HomePage
-      utilisateur={utilisateur}
-      onDeconnecte={gererDeconnexion}
-      focusTitre={focusTitre}
-    />
+    <Routes>
+      <Route element={<MiseEnPage utilisateur={utilisateur} />}>
+        <Route
+          path="/"
+          element={
+            <HomePage
+              utilisateur={utilisateur}
+              onDeconnecte={gererDeconnexion}
+              onSessionExpiree={gererDeconnexion}
+              focusTitre={focusTitre}
+            />
+          }
+        />
+        <Route
+          path="/depenses"
+          element={<PageBientotDisponible titre="Dépenses" />}
+        />
+        <Route
+          path="/depenses/nouvelle"
+          element={<PageBientotDisponible titre="Saisie d'un ticket" />}
+        />
+        <Route path="/dossiers" element={<PageBientotDisponible titre="Dossiers" />} />
+        <Route
+          path="/validation"
+          element={
+            estValideur ? (
+              <PageBientotDisponible titre="Validation" />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/profil"
+          element={
+            estValideur ? (
+              <Navigate to="/" replace />
+            ) : (
+              <PageBientotDisponible titre="Profil" />
+            )
+          }
+        />
+        <Route path="/connexion" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }
