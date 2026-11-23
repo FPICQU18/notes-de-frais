@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · Validation — détail d'un dossier</title>
+<style>
+:root{--fond:#F3F4FF;--carte:#FFFFFF;--champ:#F3F4FF;--texte:#1A1A2E;--texte2:#565A73;--primaire:#5B3DF5;--pale:#EDE9FF;--pale-texte:#3A22B0;--err-fond:#FFE4E6;--err-texte:#9F1239;--ombre:0 6px 18px rgba(40,30,120,.06);--ombre-bouton:0 10px 24px rgba(91,61,245,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:#FFFFFF;color:var(--texte);font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+a{color:inherit;text-decoration:none}
+.titre-page{font-size:20px;font-weight:800;margin:24px 20px 4px}.note-page{font-size:13px;color:var(--texte2);margin:0 20px 10px;max-width:920px;line-height:1.5}
+.planche{display:flex;flex-wrap:wrap;gap:28px;padding:16px 20px 56px;align-items:flex-start}
+figure{margin:0}figcaption{width:390px;font-size:13px;font-weight:700;color:var(--texte2);margin-bottom:8px}
+.ecran{position:relative;width:390px;height:844px;background:var(--fond);overflow:hidden;box-shadow:var(--ombre)}
+.ecran--detail{height:auto;min-height:844px;display:flex;flex-direction:column}
+.entete{height:64px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;flex:none}
+.rond{width:44px;height:44px;border:0;border-radius:16px;background:var(--carte);color:var(--texte);display:flex;align-items:center;justify-content:center}
+.zone{padding:4px 20px 0}
+.h{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0}.h2{font-size:18px;font-weight:800;margin:0}
+.mini{font-size:13px;color:var(--texte2);margin:0}.pastille{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.soumise{background:#E4E7FF;color:#3A22B0}.avatar{width:32px;height:32px;border-radius:16px;background:var(--pale);color:var(--pale-texte);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none}
+.carte{background:var(--carte);border-radius:24px;box-shadow:var(--ombre);padding:16px 18px;display:block}.carte-mini{background:var(--carte);border-radius:22px;box-shadow:var(--ombre);padding:14px 16px;display:flex;align-items:center;gap:12px}
+.liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ligne{display:flex;align-items:center;gap:10px}.baseline{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.montant{font-weight:800;font-variant-numeric:tabular-nums;margin:0}
+.bloc-titre{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:22px 0 10px}.cat{width:44px;height:44px;border-radius:16px;display:flex;align-items:center;justify-content:center;flex:none}
+.transport{background:#E4E7FF;color:#3A22B0}.hebergement{background:#EFEAFF;color:#4A2FD6}.parking{background:#DDF6E8;color:#146C3C}
+.vignettes{display:flex;gap:12px}.vignette{width:92px;border:0;background:transparent;padding:0;display:flex;flex-direction:column;gap:6px;text-align:left;font-family:inherit;color:inherit}
+.tuile{width:92px;height:112px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:#E4E7FF;color:#3A22B0;box-shadow:var(--ombre)}.vignette--vide .tuile{background:var(--carte);color:var(--texte2)}
+.histo{background:var(--carte);border-radius:20px;box-shadow:var(--ombre);padding:14px 16px}.motif{background:var(--err-fond);color:var(--err-texte);border-radius:16px;padding:12px;font-size:13px;font-weight:600;line-height:1.5;margin:8px 0 0}
+.barre{margin-top:auto;padding:12px 20px 28px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.btn{display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:18px;font-family:inherit;font-size:15px;font-weight:700;height:56px}
+.btn-primaire{background:var(--primaire);color:#FFFFFF;box-shadow:var(--ombre-bouton)}
+.btn-secondaire{background:var(--carte);color:var(--texte)}.btn-danger{background:var(--err-texte);color:#FFFFFF}
+.voile{position:absolute;inset:0;background:rgba(26,26,46,.45)}.feuille{position:absolute;left:0;right:0;bottom:0;background:#FFFFFF;border-radius:26px 26px 0 0;padding:22px 20px 28px;box-shadow:0 -10px 30px rgba(40,30,120,.12)}
+.compteur{white-space:nowrap}.feuille h2{font-size:20px;font-weight:800;margin:0 0 8px}
+label{display:block;font-size:13px;font-weight:700;color:var(--texte2);margin:14px 0 6px}
+textarea{width:100%;min-height:116px;resize:none;border:0;border-radius:18px;background:var(--champ);padding:14px 16px;font-family:inherit;font-size:15px;color:var(--texte);line-height:1.5}
+textarea[aria-invalid="true"]{outline:2px solid var(--err-texte);outline-offset:0}
+.erreur{font-size:13px;font-weight:600;color:var(--err-texte);margin:6px 0 0}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+</style>
+</head>
+<body>
+<h1 class="titre-page">Validation — détail d'un dossier (390 × 844)</h1>
+<p class="note-page">En-tête : retour (44 px), pastille de statut. Corps : titre, demandeur, montant, dépenses, justificatifs, historique. Barre d'actions collée en bas (56 px) : « Refuser » secondaire, « Valider » primaire. Surcouches : feuille basse rayon 26 px sur voile <code>rgba(26,26,46,.45)</code>, <code>role="dialog" aria-modal="true"</code>.</p>
+<div class="planche">
+
+<figure>
+<figcaption>1 · Détail nominal — dossier soumis, deux justificatifs, historique complet</figcaption>
+<div class="ecran ecran--detail">
+  <header class="entete">
+    <button type="button" class="rond" aria-label="Retour"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <span class="pastille soumise">Soumise</span>
+  </header>
+  <div class="zone">
+    <h2 class="h">Semaine 47</h2>
+    <div class="ligne" style="margin-top:10px"><span class="avatar" aria-hidden="true">CM</span><p style="margin:0;font-size:14px;font-weight:700">Camille Moreau</p></div>
+    <p class="mini" style="margin-top:6px">Envoyé le 21 nov. 2026 à 18:42</p>
+    <div class="carte" style="margin-top:16px">
+      <div class="baseline"><p class="mini" style="font-weight:600;font-size:14px">Total du dossier</p><p class="montant" style="font-size:34px;letter-spacing:-.03em">180,00 €</p></div>
+    </div>
+
+    <div class="bloc-titre"><h3 class="h2">Dépenses</h3><p class="mini" style="font-weight:600">3 dépenses</p></div>
+    <ul class="liste">
+      <li class="carte-mini"><span class="cat transport"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="14" rx="3"/><path d="M8 21l2-3M16 21l-2-3M6 11h12"/></svg></span><div style="flex:1;min-width:0"><p style="margin:0;font-size:15px;font-weight:700">Train Paris → Lyon</p><p class="mini" style="margin-top:3px">17 nov.</p></div><p class="montant" style="font-size:15px">79,00 €</p></li>
+      <li class="carte-mini"><span class="cat hebergement"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18V7M3 14h18v4M21 14v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="2"/></svg></span><div style="flex:1;min-width:0"><p style="margin:0;font-size:15px;font-weight:700">Hôtel de la Gare</p><p class="mini" style="margin-top:3px">17 nov.</p></div><p class="montant" style="font-size:15px">89,00 €</p></li>
+      <li class="carte-mini"><span class="cat parking"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 16V8h3a2.5 2.5 0 0 1 0 5h-3"/></svg></span><div style="flex:1;min-width:0"><p style="margin:0;font-size:15px;font-weight:700">Parking Part-Dieu</p><p class="mini" style="margin-top:3px">17 nov.</p></div><p class="montant" style="font-size:15px">12,00 €</p></li>
+    </ul>
+
+    <div class="bloc-titre"><h3 class="h2">Justificatifs</h3><p class="mini" style="font-weight:600">Touchez une vignette pour l'agrandir.</p></div>
+    <div class="vignettes">
+      <button type="button" class="vignette" aria-label="Agrandir le justificatif : Train Paris → Lyon">
+        <span class="tuile"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9" cy="10" r="1.5"/><path d="M4 15l5-4 4 3 3-2 4 3"/></svg></span>
+        <span class="mini" style="font-weight:600;line-height:1.3">Ticket · Train Paris → Lyon</span>
+      </button>
+      <div class="vignette vignette--vide">
+        <span class="tuile" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M3 3l18 18"/></svg></span>
+        <span class="mini" style="font-weight:600;line-height:1.3">Aucune photo</span>
+      </div>
+    </div>
+
+    <div class="bloc-titre"><h3 class="h2">Historique</h3></div>
+    <ul class="liste">
+      <li class="histo"><p class="mini" style="font-weight:600">18 nov. 2026 à 09:12 · Camille Moreau</p><p style="margin:4px 0 0;font-size:15px;font-weight:600">Brouillon → Soumise</p></li>
+      <li class="histo"><p class="mini" style="font-weight:600">18 nov. 2026 à 15:03 · Sofiane Benali</p><p style="margin:4px 0 0;font-size:15px;font-weight:600">Soumise → Refusée</p><p class="motif"><strong>Motif :</strong> le justificatif de l'hôtel est illisible. Merci de joindre une photo nette.</p></li>
+      <li class="histo"><p class="mini" style="font-weight:600">20 nov. 2026 à 08:40 · Camille Moreau</p><p style="margin:4px 0 0;font-size:15px;font-weight:600">Refusée → Brouillon</p></li>
+      <li class="histo"><p class="mini" style="font-weight:600">21 nov. 2026 à 18:42 · Camille Moreau</p><p style="margin:4px 0 0;font-size:15px;font-weight:600">Brouillon → Soumise</p></li>
+    </ul>
+  </div>
+  <div class="barre">
+    <button type="button" class="btn btn-secondaire">Refuser</button>
+    <button type="button" class="btn btn-primaire">Valider</button>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>2 · Surcouche — confirmation de validation</figcaption>
+<div class="ecran">
+  <header class="entete"><button type="button" class="rond" aria-label="Retour"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><span class="pastille soumise">Soumise</span></header>
+  <div class="zone"><h2 class="h">Semaine 47</h2><div class="ligne" style="margin-top:10px"><span class="avatar" aria-hidden="true">CM</span><p style="margin:0;font-size:14px;font-weight:700">Camille Moreau</p></div>
+    <div class="carte" style="margin-top:16px"><div class="baseline"><p class="mini" style="font-weight:600;font-size:14px">Total du dossier</p><p class="montant" style="font-size:34px;letter-spacing:-.03em">180,00 €</p></div></div>
+  </div>
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-valider">
+    <h2 id="titre-valider">Valider ce dossier ?</h2>
+    <p class="mini" style="font-size:14px;line-height:1.5">Le dossier passera au statut « Validée ». Camille Moreau sera notifiée de la décision.</p>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-primaire">Valider le dossier</button></div>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>3 · Surcouche — motif de refus saisi (compteur)</figcaption>
+<div class="ecran">
+  <header class="entete"><button type="button" class="rond" aria-label="Retour"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><span class="pastille soumise">Soumise</span></header>
+  <div class="zone"><h2 class="h">Semaine 47</h2><div class="ligne" style="margin-top:10px"><span class="avatar" aria-hidden="true">CM</span><p style="margin:0;font-size:14px;font-weight:700">Camille Moreau</p></div></div>
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-refus">
+    <h2 id="titre-refus">Refuser ce dossier</h2>
+    <p class="mini" style="font-size:14px;line-height:1.5">Le dossier passera au statut « Refusée ». Camille Moreau pourra le corriger et le renvoyer.</p>
+    <label for="motif-refus">Motif du refus</label>
+    <textarea id="motif-refus" maxlength="1000" aria-describedby="aide-motif">Le justificatif de l'hôtel est illisible. Merci de joindre une photo nette du ticket.</textarea>
+    <div class="baseline" style="margin-top:6px"><p class="mini" id="aide-motif" style="font-size:12px">Obligatoire · 1 000 caractères maximum.</p><p class="mini compteur" style="font-weight:600">85 / 1 000</p></div>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-danger">Refuser le dossier</button></div>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>4 · Surcouche — refus vide, erreur <code>role="alert"</code></figcaption>
+<div class="ecran">
+  <header class="entete"><button type="button" class="rond" aria-label="Retour"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><span class="pastille soumise">Soumise</span></header>
+  <div class="zone"><h2 class="h">Semaine 47</h2><div class="ligne" style="margin-top:10px"><span class="avatar" aria-hidden="true">CM</span><p style="margin:0;font-size:14px;font-weight:700">Camille Moreau</p></div></div>
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-refus-erreur">
+    <h2 id="titre-refus-erreur">Refuser ce dossier</h2>
+    <p class="mini" style="font-size:14px;line-height:1.5">Le dossier passera au statut « Refusée ». Camille Moreau pourra le corriger et le renvoyer.</p>
+    <label for="motif-refus-erreur">Motif du refus</label>
+    <textarea id="motif-refus-erreur" maxlength="1000" aria-invalid="true" aria-describedby="aide-motif-erreur" placeholder=""></textarea>
+    <p class="erreur" id="aide-motif-erreur" role="alert">Le motif du refus est requis.</p>
+    <div class="baseline" style="margin-top:6px"><p class="mini" style="font-size:12px">Obligatoire · 1 000 caractères maximum.</p><p class="mini compteur" style="font-weight:600" aria-hidden="true">0 / 1 000</p></div>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-danger">Refuser le dossier</button></div>
+  </div>
+</div>
+</figure>
+
+</div>
+</body>
+</html>

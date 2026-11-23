@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · Validation — file d'attente</title>
+<style>
+:root{--fond:#F3F4FF;--carte:#FFFFFF;--texte:#1A1A2E;--texte2:#565A73;--primaire:#5B3DF5;--pale:#EDE9FF;--pale-texte:#3A22B0;--err-fond:#FFE4E6;--err-texte:#9F1239;--ombre:0 6px 18px rgba(40,30,120,.06);--ombre-bouton:0 10px 24px rgba(91,61,245,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:#FFFFFF;color:var(--texte);font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+a{color:inherit;text-decoration:none}
+.titre-page{font-size:20px;font-weight:800;margin:24px 20px 4px}
+.note-page{font-size:13px;color:var(--texte2);margin:0 20px 10px;max-width:920px;line-height:1.5}
+.planche{display:flex;flex-wrap:wrap;gap:28px;padding:16px 20px 56px;align-items:flex-start}
+figure{margin:0}
+figcaption{width:390px;font-size:13px;font-weight:700;color:var(--texte2);margin-bottom:8px}
+.ecran{position:relative;width:390px;height:844px;background:var(--fond);overflow:hidden;box-shadow:var(--ombre)}
+.zone{padding:4px 20px 0}
+.h{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0}
+.sous{font-size:14px;color:var(--texte2);margin:4px 0 0}
+.pastille{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.soumise{background:#E4E7FF;color:#3A22B0}.validee{background:#DDF6E8;color:#146C3C}.refusee{background:#FFE4E6;color:#9F1239}.remboursee{background:#E0F2FE;color:#075985}
+.carte{background:var(--carte);border-radius:24px;box-shadow:var(--ombre);padding:16px 18px;display:block}
+.liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ligne{display:flex;align-items:center;gap:10px}
+.mini{font-size:13px;color:var(--texte2);margin:0}
+.montant{font-weight:800;font-variant-numeric:tabular-nums;margin:0}
+.avatar{width:40px;height:40px;border-radius:20px;background:var(--pale);color:var(--pale-texte);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none}
+.onglets{display:flex;gap:6px;overflow-x:auto;margin:16px 0 0;padding:2px 0 6px;scrollbar-width:none}
+.onglet{height:44px;padding:0 12px;border:0;border-radius:999px;background:var(--carte);color:var(--texte);font:700 13px inherit;font-family:inherit;white-space:nowrap;flex:none}
+.onglet[aria-selected="true"]{background:var(--primaire);color:#FFFFFF}
+.panneau{margin-top:14px;padding:0 20px}
+.vide{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:64px;text-align:center;padding:0 20px}
+.bulle-vide{width:64px;height:64px;border-radius:22px;background:var(--pale);color:var(--pale-texte);display:flex;align-items:center;justify-content:center}
+.alerte{background:var(--err-fond);color:var(--err-texte);border-radius:16px;padding:16px;font-size:13px;font-weight:600;margin:16px 0;line-height:1.5}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:18px;font-family:inherit;font-size:15px;font-weight:700}
+.btn-primaire{height:52px;background:var(--primaire);color:#FFFFFF}
+.nav{position:absolute;left:16px;right:16px;bottom:20px;height:68px;border-radius:26px;background:#FFFFFF;box-shadow:0 10px 30px rgba(40,30,120,.12);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center}
+.nav a{height:52px;display:flex;align-items:center;justify-content:center;color:var(--texte2)}
+.nav a[aria-current="page"]{color:var(--primaire)}
+.nav .plus{display:flex;justify-content:center}
+.nav .plus a{width:56px;height:56px;margin-top:-26px;border-radius:20px;background:var(--primaire);color:#FFFFFF;box-shadow:var(--ombre-bouton)}
+</style>
+</head>
+<body>
+<h1 class="titre-page">Validation — file d'attente (390 × 844, mobile d'abord)</h1>
+<p class="note-page">Onglets en <code>role="tablist"</code> ; l'onglet actif est en primaire <code>#5B3DF5</code>, texte blanc (6,12:1). Les cartes sont les mêmes composants que <code>dossier.html</code> : rayon 24 px, ombre <code>0 6px 18px rgba(40,30,120,.06)</code>, cible ≥ 44 px. Aucune ressource distante (police laissée au système si Plus Jakarta Sans n'est pas installée). La barre de navigation flottante (identique à <code>accueil.html</code>) reste affichée dans tous les états : elle n'est dessinée que sur la planche 1.</p>
+<div class="planche">
+
+<figure>
+<figcaption>1 · Nominal — onglet « À traiter », dossiers soumis</figcaption>
+<div class="ecran">
+  <div class="zone" style="padding-top:24px">
+    <h2 class="h">Validation</h2>
+    <p class="sous">3 dossiers en attente</p>
+  </div>
+  <div class="onglets" role="tablist" aria-label="Filtrer les dossiers par statut">
+    <button type="button" class="onglet" role="tab" id="onglet-a-traiter" aria-selected="true" aria-controls="panneau-a-traiter">À traiter</button>
+    <button type="button" class="onglet" role="tab" id="onglet-valides" aria-selected="false" aria-controls="panneau-valides" tabindex="-1">Validés</button>
+    <button type="button" class="onglet" role="tab" id="onglet-refuses" aria-selected="false" aria-controls="panneau-refuses" tabindex="-1">Refusés</button>
+    <button type="button" class="onglet" role="tab" id="onglet-rembourses" aria-selected="false" aria-controls="panneau-rembourses" tabindex="-1">Remboursés</button>
+  </div>
+  <section class="panneau" id="panneau-a-traiter" role="tabpanel" aria-labelledby="onglet-a-traiter" tabindex="0">
+    <ul class="liste">
+      <li><a class="carte" href="#">
+        <div class="ligne"><span class="avatar" aria-hidden="true">CM</span><p class="mini" style="flex:1;min-width:0;font-weight:700">Camille Moreau</p><span class="pastille soumise">Soumise</span></div>
+        <h3 class="montant" style="font-size:17px;margin:10px 0 0">Semaine 47</h3>
+        <div class="ligne" style="justify-content:space-between;align-items:baseline;margin-top:6px"><p class="mini" style="font-weight:600">Envoyé le 21 nov.</p><p class="montant" style="font-size:17px">180,00 €</p></div>
+      </a></li>
+      <li><a class="carte" href="#">
+        <div class="ligne"><span class="avatar" aria-hidden="true">SB</span><p class="mini" style="flex:1;min-width:0;font-weight:700">Sofiane Benali</p><span class="pastille soumise">Soumise</span></div>
+        <h3 class="montant" style="font-size:17px;margin:10px 0 0">Déplacement Lille</h3>
+        <div class="ligne" style="justify-content:space-between;align-items:baseline;margin-top:6px"><p class="mini" style="font-weight:600">Envoyé le 20 nov.</p><p class="montant" style="font-size:17px">96,40 €</p></div>
+      </a></li>
+      <li><a class="carte" href="#">
+        <div class="ligne"><span class="avatar" aria-hidden="true">LF</span><p class="mini" style="flex:1;min-width:0;font-weight:700">Léa Fontaine</p><span class="pastille soumise">Soumise</span></div>
+        <h3 class="montant" style="font-size:17px;margin:10px 0 0">Salon professionnel — Lyon</h3>
+        <div class="ligne" style="justify-content:space-between;align-items:baseline;margin-top:6px"><p class="mini" style="font-weight:600">Envoyé le 19 nov.</p><p class="montant" style="font-size:17px">412,30 €</p></div>
+      </a></li>
+    </ul>
+  </section>
+  <nav class="nav" aria-label="Navigation principale">
+    <a href="#" aria-label="Accueil"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></a>
+    <a href="#" aria-label="Dépenses"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></a>
+    <div class="plus"><a href="#" aria-label="Ajouter une dépense"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></a></div>
+    <a href="#" aria-label="Dossiers"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg></a>
+    <a href="#" aria-label="Validation" aria-current="page"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></a>
+  </nav>
+</div>
+</figure>
+
+<figure>
+<figcaption>2 · Chargement — <code>aria-busy="true"</code>, pas de squelette</figcaption>
+<div class="ecran">
+  <div class="zone" style="padding-top:24px"><h2 class="h">Validation</h2><p class="sous">Chargement des dossiers…</p></div>
+  <div class="onglets" role="tablist" aria-label="Filtrer les dossiers par statut">
+    <button type="button" class="onglet" role="tab" aria-selected="true">À traiter</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Validés</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Refusés</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Remboursés</button>
+  </div>
+  <section class="panneau" role="tabpanel" aria-busy="true"><p class="mini" style="font-size:15px;margin-top:12px">Chargement…</p></section>
+</div>
+</figure>
+
+<figure>
+<figcaption>3 · Vide — « Aucun dossier à traiter. »</figcaption>
+<div class="ecran">
+  <div class="zone" style="padding-top:24px"><h2 class="h">Validation</h2><p class="sous">Aucun dossier en attente</p></div>
+  <div class="onglets" role="tablist" aria-label="Filtrer les dossiers par statut">
+    <button type="button" class="onglet" role="tab" aria-selected="true">À traiter</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Validés</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Refusés</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Remboursés</button>
+  </div>
+  <section class="panneau" role="tabpanel">
+    <div class="vide">
+      <span class="bulle-vide"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>
+      <p style="margin:0;font-size:15px;font-weight:700">Aucun dossier à traiter.</p>
+      <p class="mini" style="font-size:14px;line-height:1.5">Les dossiers que vos collègues envoient en validation apparaîtront ici.</p>
+    </div>
+  </section>
+</div>
+</figure>
+
+<figure>
+<figcaption>4 · Erreur — alerte <code>role="alert"</code> + « Réessayer »</figcaption>
+<div class="ecran">
+  <div class="zone" style="padding-top:24px"><h2 class="h">Validation</h2><p class="sous">3 dossiers en attente</p></div>
+  <div class="onglets" role="tablist" aria-label="Filtrer les dossiers par statut">
+    <button type="button" class="onglet" role="tab" aria-selected="true">À traiter</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Validés</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Refusés</button>
+    <button type="button" class="onglet" role="tab" aria-selected="false" tabindex="-1">Remboursés</button>
+  </div>
+  <section class="panneau" role="tabpanel">
+    <div class="alerte" role="alert">Serveur injoignable. Vérifiez votre connexion.</div>
+    <button type="button" class="btn btn-primaire" style="width:100%">Réessayer</button>
+  </section>
+</div>
+</figure>
+
+</div>
+</body>
+</html>
