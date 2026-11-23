@@ -45,12 +45,26 @@ def _valide_depense_ids(value: list[int] | None) -> list[int] | None:
     return value
 
 
+def _valide_depense_ids_requises(value: list[int]) -> list[int]:
+    if not value:
+        raise ValueError("Au moins une dépense est requise.")
+    if len(value) != len(set(value)):
+        raise ValueError("Les dépenses ne doivent pas être dupliquées.")
+    return value
+
+
 class NoteCreate(BaseModel):
     libelle: str
     depense_ids: list[int] | None = None
 
     _libelle = field_validator("libelle")(_valide_libelle)
     _depense_ids = field_validator("depense_ids")(_valide_depense_ids)
+
+
+class NoteAttacheDepenses(BaseModel):
+    depense_ids: list[int]
+
+    _depense_ids = field_validator("depense_ids")(_valide_depense_ids_requises)
 
 
 class NoteUpdate(BaseModel):

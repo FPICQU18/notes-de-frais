@@ -20,7 +20,13 @@ from app.auth.dependencies import get_current_user
 from app.db import get_db
 from app.models import Depense, Note, User
 from app.schemas.depense import DepenseRead
-from app.schemas.note import NoteCreate, NoteDetail, NoteRead, NoteUpdate
+from app.schemas.note import (
+    NoteAttacheDepenses,
+    NoteCreate,
+    NoteDetail,
+    NoteRead,
+    NoteUpdate,
+)
 
 router = APIRouter(prefix="/api/v1/notes", tags=["notes"])
 
@@ -195,6 +201,36 @@ def add_depense(note_id: int, depense_id: int, db: DbSession, current_user: Curr
     if depense.note_id is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_DEPENSE_DEJA_RATTACHEE)
     depense.note_id = note.id
+    note.updated_at = datetime.now(UTC)
+    db.commit()
+    return None
+
+
+@router.post("/{note_id}/depenses", status_code=status.HTTP_204_NO_CONTENT)
+def add_depenses(
+    note_id: int,
+    payload: NoteAttacheDepenses,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    """Rattache plusieurs dépenses de l'appelant à son dossier `brouillon`.
+
+    L'opération est atomique : toute dépense absente, d'un autre compte ou déjà
+    rattachée annule l'ensemble (404/409), sans aucun rattachement partiel. Les
+    dépenses sont validées une à une avant le moindre rattachement.
+    """
+    note = _get_owned_note(db, current_user.id, note_id)
+    _ensure_brouillon(note)
+    depenses: list[Depense] = []
+    for depense_id in payload.depense_ids:
+        depense = _get_owned_depense(db, current_user.id, depense_id)
+        if depense.note_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_DEPENSE_DEJA_RATTACHEE
+            )
+        depenses.append(depense)
+    for depense in depenses:
+        depense.note_id = note.id
     note.updated_at = datetime.now(UTC)
     db.commit()
     return None
