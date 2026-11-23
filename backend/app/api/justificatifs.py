@@ -15,9 +15,10 @@ maximum) et aucun fichier trop volumineux n'est chargé en mémoire ni écrit en
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
+from starlette.datastructures import UploadFile
 
 from app.api.depenses import _ensure_depense_modifiable, _get_owned_depense
 from app.auth.dependencies import get_current_user
