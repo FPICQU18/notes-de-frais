@@ -5,7 +5,7 @@
 l'appelant. `NoteDetail` ajoute la liste des dépenses rattachées.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -67,6 +67,7 @@ class NoteRead(BaseModel):
     statut: str
     total_centimes: int
     nb_depenses: int
+    derniere_depense_le: date | None
     created_at: datetime
     updated_at: datetime
 
