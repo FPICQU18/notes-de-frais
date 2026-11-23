@@ -105,7 +105,7 @@ export function HomePage({
               : "dossier en brouillon"}
           </Link>
         </div>
-        <Link className="accueil-scanner" to="/depenses/nouvelle">
+        <Link className="accueil-scanner" to="/depenses/nouvelle?scan=1">
           <Camera aria-hidden="true" strokeWidth={2} />
           Scanner un ticket
         </Link>

@@ -29,6 +29,8 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 JPEG = b"\xff\xd8\xff" + b"\x00" * 16
 PDF = b"%PDF-1.4\n" + b"\x00" * 16
 HEIC = b"\x00\x00\x00\x18" + b"ftyp" + b"heic" + b"\x00" * 8
+HEIX = b"\x00\x00\x00\x18" + b"ftyp" + b"heix" + b"\x00" * 8
+MIF1 = b"\x00\x00\x00\x18" + b"ftyp" + b"mif1" + b"\x00" * 8
 
 FIELDS_JUSTIFICATIF = {"nom_fichier", "content_type", "taille_octets", "created_at", "updated_at"}
 
@@ -393,6 +395,8 @@ def test_put_png_content_type_text_plain_accepte(client, db_session):
         (JPEG, "image/jpeg"),
         (PNG, "image/png"),
         (HEIC, "image/heic"),
+        (HEIX, "image/heic"),
+        (MIF1, "image/heic"),
         (PDF, "application/pdf"),
     ],
 )

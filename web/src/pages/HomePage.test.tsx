@@ -206,14 +206,15 @@ test("détail : « À classer » si note_id null, « Semaine 47 » sinon", async
   expect(screen.getByText("Semaine 47")).toBeInTheDocument();
 });
 
-test("« Scanner un ticket » mène à la saisie d'un ticket", async () => {
+test("« Scanner un ticket » mène à la saisie d'un ticket avec ?scan=1", async () => {
   mockAccueil();
   const utilisateur = userEvent.setup();
   renderAccueil();
 
-  await utilisateur.click(
-    await screen.findByRole("link", { name: "Scanner un ticket" }),
-  );
+  const lien = await screen.findByRole("link", { name: "Scanner un ticket" });
+  expect(lien).toHaveAttribute("href", "/depenses/nouvelle?scan=1");
+
+  await utilisateur.click(lien);
 
   expect(await screen.findByText("Saisie d'un ticket")).toBeInTheDocument();
 });

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -44,6 +44,11 @@ function routeurDetail(routes: Array<{ method: string; url: string; reponse: Res
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
+    // Le bloc justificatif, en modification active, sonde l'existence du fichier.
+    if (method === "GET" && /^\/api\/v1\/depenses\/\d+\/justificatif$/.test(url)) {
+      const explicite = routes.find((r) => r.method === method && r.url === url);
+      return explicite?.reponse ?? jsonResponse({ detail: "Introuvable." }, 404);
+    }
     const trouve = routes.find((r) => r.method === method && r.url === url);
     if (trouve === undefined) {
       return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
@@ -110,7 +115,7 @@ test("note_id null : aucun appel à /notes, formulaire de modification actif", a
     screen.getByRole("heading", { name: "Modifier la dépense" }),
   ).toBeInTheDocument();
   expect(montant).toBeEnabled();
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(String(fetchMock.mock.calls[0][0])).toBe("/api/v1/depenses/1");
 });
 
@@ -170,12 +175,17 @@ test("404 → écran « Dépense introuvable. » avec lien retour", async () => 
 
 test("erreur réseau : alerte + « Réessayer » relance le GET", async () => {
   let appels = 0;
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     appels += 1;
     if (appels === 1) {
       throw new Error("réseau");
     }
-    return jsonResponse(depense({ id: 1 }));
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1" && method === "GET") {
+      return jsonResponse(depense({ id: 1 }));
+    }
+    return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
   });
   const utilisateur = userEvent.setup();
 
@@ -184,7 +194,7 @@ test("erreur réseau : alerte + « Réessayer » relance le GET", async () => {
   expect(await screen.findByRole("alert")).toBeInTheDocument();
   await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   expect(
     await screen.findByRole("heading", { name: "Modifier la dépense" }),
   ).toBeInTheDocument();
@@ -352,6 +362,57 @@ test("409 sur PATCH : message du serveur affiché et retour en lecture seule", a
   ).not.toBeInTheDocument();
 });
 
+test("409 sur PUT du justificatif : message du serveur affiché et retour en lecture seule", async () => {
+  let appelsNote = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1" && method === "GET") {
+      return jsonResponse(depense({ id: 1, note_id: 5 }));
+    }
+    if (url === "/api/v1/notes/5" && method === "GET") {
+      appelsNote += 1;
+      return jsonResponse(
+        note({ id: 5, statut: appelsNote === 1 ? "brouillon" : "soumise" }),
+      );
+    }
+    if (url === "/api/v1/depenses/1/justificatif" && method === "GET") {
+      return jsonResponse({ detail: "Introuvable." }, 404);
+    }
+    if (url === "/api/v1/depenses/1/justificatif" && method === "PUT") {
+      return jsonResponse(
+        { detail: "La dépense appartient à un dossier qui n'est pas au statut brouillon." },
+        409,
+      );
+    }
+    return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
+  });
+  const utilisateur = userEvent.setup();
+
+  renderDetail();
+
+  // Le bloc justificatif a sondé l'absence de fichier : le formulaire est actif.
+  expect(await screen.findByText("Aucune photo jointe")).toBeInTheDocument();
+
+  const fichier = new File(["%PDF-1.4"], "ticket.pdf", { type: "application/pdf" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent(
+    "La dépense appartient à un dossier qui n'est pas au statut brouillon.",
+  );
+  expect(screen.getByLabelText("Montant")).toBeDisabled();
+  expect(
+    screen.queryByRole("button", { name: "Enregistrer les modifications" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("LISTE")).not.toBeInTheDocument();
+});
+
 test("suppression annulée : aucun DELETE émis, le formulaire reste actif", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
     routeurDetail([
@@ -375,7 +436,7 @@ test("suppression annulée : aucun DELETE émis, le formulaire reste actif", asy
   expect(
     screen.queryByRole("group", { name: "Confirmation de suppression" }),
   ).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(
     screen.getByRole("button", { name: "Enregistrer les modifications" }),
   ).toBeEnabled();
