@@ -1,6 +1,6 @@
 """Tests des routes du justificatif d'une dépense (envoi et téléchargement)."""
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 import sqlalchemy as sa
@@ -19,6 +19,10 @@ PASSWORD_HASH = hash_password(PASSWORD)
 DATE_PASSEE = date(2024, 1, 15)
 
 MAX_TAILLE = 10 * 1024 * 1024  # 10 Mo
+
+# Corps excédant la limite de 10 Mo d'exactement 2 octets : sert à prouver que les
+# contrôles d'accès (404/409) passent avant la lecture du corps, sans jamais le lire.
+CORPS_TROP_GROS = b"XX" + b"0" * MAX_TAILLE  # 10 Mo + 2 octets
 
 # Signatures de fichiers valides (le contenu au-delà de la signature est quelconque).
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -211,6 +215,32 @@ def test_put_depense_autre_utilisateur_404(client, db_session, role):
     assert _count_justificatifs(db_session) == 0
 
 
+# Un 404 doit être rendu sans jamais lire le corps : même un fichier de 10 Mo + 2
+# octets renvoie 404 (et non 413) quand la dépense est introuvable ou invisible.
+
+
+def test_put_corps_volumineux_depense_inexistante_404(client, db_session):
+    _connect(client, db_session)
+
+    response = _upload(client, 999999, CORPS_TROP_GROS)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Dépense introuvable."}
+    assert _count_justificatifs(db_session) == 0
+
+
+def test_put_corps_volumineux_depense_autre_utilisateur_404(client, db_session):
+    proprietaire = _connect(client, db_session)
+    depense = _make_depense(db_session, proprietaire)
+    _connect(client, db_session, email="autre@example.com", role="utilisateur")
+
+    response = _upload(client, depense.id, CORPS_TROP_GROS)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Dépense introuvable."}
+    assert _count_justificatifs(db_session) == 0
+
+
 # --- Envoi : 409 (statut du dossier) ------------------------------------------
 
 
@@ -238,6 +268,31 @@ def test_put_dossier_non_brouillon_409_justificatif_intact(client, db_session):
     assert _count_justificatifs(db_session) == 1
 
 
+def test_put_corps_volumineux_dossier_soumise_409_justificatif_intact(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    depense = _make_depense(db_session, user, note_id=note.id)
+    assert _upload(client, depense.id, PNG).status_code == 200
+    avant = _justificatif_de(db_session, depense.id)
+    assert avant is not None
+    note.statut = "soumise"
+    db_session.commit()
+
+    # Le 409 prime sur le 413 : le statut du dossier est contrôlé avant la lecture
+    # du corps, donc même un fichier de 10 Mo + 2 octets renvoie 409.
+    response = _upload(client, depense.id, CORPS_TROP_GROS)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "La dépense appartient à un dossier qui n'est pas au statut brouillon."
+    )
+    apres = _justificatif_de(db_session, depense.id)
+    assert apres is not None
+    assert apres.donnees == avant.donnees == PNG
+    assert apres.content_type == "image/png"
+    assert _count_justificatifs(db_session) == 1
+
+
 # --- Envoi : 413 (taille) -----------------------------------------------------
 
 
@@ -245,9 +300,7 @@ def test_put_fichier_trop_gros_413_sans_creation(client, db_session):
     user = _connect(client, db_session)
     depense = _make_depense(db_session, user)
     # Signature inconnue ET taille excessive : 413 prime sur le 422 de type.
-    trop_gros = b"XX" + b"0" * MAX_TAILLE  # 10 Mo + 2 octets
-
-    response = _upload(client, depense.id, trop_gros)
+    response = _upload(client, depense.id, CORPS_TROP_GROS)
 
     assert response.status_code == 413
     assert response.json() == {"detail": "Le justificatif ne peut pas dépasser 10 Mo."}
@@ -392,7 +445,7 @@ def test_put_remplace_200_une_seule_ligne(client, db_session):
 
     first = _upload(client, depense.id, PNG)
     assert first.status_code == 200
-    first_updated = first.json()["updated_at"]
+    first_updated = datetime.fromisoformat(first.json()["updated_at"])
 
     second = _upload(client, depense.id, PDF, filename="recu.pdf", content_type="application/pdf")
 
@@ -401,7 +454,7 @@ def test_put_remplace_200_une_seule_ligne(client, db_session):
     assert body["content_type"] == "application/pdf"
     assert body["taille_octets"] == len(PDF)
     assert body["nom_fichier"] == "recu.pdf"
-    assert body["updated_at"] != first_updated
+    assert datetime.fromisoformat(body["updated_at"]) > first_updated
 
     assert _count_justificatifs(db_session) == 1
     stored = _justificatif_de(db_session, depense.id)
@@ -482,8 +535,9 @@ def test_get_entetes_200(client, db_session):
     assert response.headers["content-length"] == str(len(PNG))
 
 
+@pytest.mark.parametrize("role", ["valideur", "admin"])
 @pytest.mark.parametrize("statut", ["soumise", "validee", "refusee", "remboursee"])
-def test_get_valideur_non_proprietaire_non_brouillon_200(client, db_session, statut):
+def test_get_valideur_ou_admin_non_proprietaire_non_brouillon_200(client, db_session, role, statut):
     proprietaire = _connect(client, db_session)
     note = _make_note(db_session, proprietaire)
     depense = _make_depense(db_session, proprietaire, note_id=note.id)
@@ -491,7 +545,7 @@ def test_get_valideur_non_proprietaire_non_brouillon_200(client, db_session, sta
     note.statut = statut
     db_session.commit()
 
-    _connect(client, db_session, email="valideur@example.com", role="valideur")
+    _connect(client, db_session, email=f"{role}@example.com", role=role)
     response = client.get(f"/api/v1/depenses/{depense.id}/justificatif")
 
     assert response.status_code == 200
@@ -589,27 +643,51 @@ def _aucune_cle(donnees, cles: set[str]) -> bool:
 
 
 def test_pas_de_fuite_octets_dans_listes_et_details(client, db_session):
-    user = _connect(client, db_session)
+    user = _connect(client, db_session)  # propriétaire : jean@example.com
+    _make_user(db_session, email="valideur@example.com", role="valideur")
     note = _make_note(db_session, user)
     depense = _make_depense(db_session, user, note_id=note.id)
     assert _upload(client, depense.id, PNG).status_code == 200
     note.statut = "soumise"
     db_session.commit()
 
-    # Propriétaire : listes et détails des dépenses, détail de note.
-    for url in (
+    routes_owner = (
         "/api/v1/depenses",
         f"/api/v1/depenses/{depense.id}",
         f"/api/v1/notes/{note.id}",
-    ):
-        response = client.get(url)
-        assert response.status_code == 200
-        assert _aucune_cle(response.json(), {"donnees", "justificatif"})
-        assert PNG not in response.content
+    )
+    route_validation = f"/api/v1/validation/notes/{note.id}"
 
-    # Valideur : détail de validation (dossier non brouillon).
-    _connect(client, db_session, email="valideur@example.com", role="valideur")
-    response = client.get(f"/api/v1/validation/notes/{note.id}")
-    assert response.status_code == 200
-    assert _aucune_cle(response.json(), {"donnees", "justificatif"})
-    assert PNG not in response.content
+    def lire_toutes_les_routes() -> dict[str, tuple[dict, bytes]]:
+        """Lit les 4 routes (3 propriétaire + 1 valideur), renvoie (json, contenu)."""
+        resultats = {}
+        for url in routes_owner:
+            response = client.get(url)
+            assert response.status_code == 200
+            resultats[url] = (response.json(), response.content)
+        _login(client, "valideur@example.com")
+        response = client.get(route_validation)
+        assert response.status_code == 200
+        resultats[route_validation] = (response.json(), response.content)
+        _login(client, "jean@example.com")  # repasser propriétaire
+        return resultats
+
+    petit = lire_toutes_les_routes()
+
+    # Remplacement par un justificatif proche de la limite de 10 Mo : les 4 routes
+    # doivent renvoyer exactement le même JSON (mêmes clés, aucune `donnees`) et le
+    # même contenu — la taille des réponses ne dépend donc pas de celle du fichier.
+    gros = b"\x89PNG\r\n\x1a\n" + b"0" * (MAX_TAILLE - len(b"\x89PNG\r\n\x1a\n"))
+    assert len(gros) == MAX_TAILLE
+    assert _upload(client, depense.id, gros).status_code == 200
+
+    grand = lire_toutes_les_routes()
+
+    for url in (*routes_owner, route_validation):
+        json_petit, contenu_petit = petit[url]
+        json_grand, contenu_grand = grand[url]
+        assert json_grand == json_petit
+        assert contenu_grand == contenu_petit
+        assert _aucune_cle(json_grand, {"donnees", "justificatif"})
+        assert PNG not in contenu_grand
+        assert gros not in contenu_grand
