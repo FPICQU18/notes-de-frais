@@ -321,3 +321,92 @@ test("401 au chargement : la session est considérée expirée", async () => {
 
   await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
 });
+
+test("401 à la création : session expirée, aucune navigation, aucun nouvel appel", async () => {
+  const onSessionExpiree = vi.fn();
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+    async (_input, init) => {
+      if (init?.method === "POST") {
+        return jsonResponse({ detail: "Session expirée." }, 401);
+      }
+      return jsonResponse([]);
+    },
+  );
+  const utilisateur = userEvent.setup();
+
+  render(
+    <MemoryRouter initialEntries={["/dossiers"]}>
+      <Routes>
+        <Route
+          path="/dossiers"
+          element={<DossiersPage onSessionExpiree={onSessionExpiree} />}
+        />
+        <Route path="/dossiers/:id" element={<div>DÉTAIL DOSSIER</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation.");
+  await utilisateur.click(screen.getByRole("button", { name: "Nouveau dossier" }));
+  await utilisateur.type(screen.getByLabelText("Titre"), "Mon dossier");
+  await utilisateur.click(screen.getByRole("button", { name: "Créer" }));
+
+  await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  expect(screen.queryByText("DÉTAIL DOSSIER")).not.toBeInTheDocument();
+
+  const appelsPost = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+  expect(appelsPost).toHaveLength(1);
+});
+
+test("création : « Création… » et « Annuler » désactivés pendant l'envoi puis navigation", async () => {
+  let resoudrePost!: (reponse: Response) => void;
+  vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) => {
+    if (init?.method === "POST") {
+      return new Promise<Response>((resoudre) => {
+        resoudrePost = resoudre;
+      });
+    }
+    return Promise.resolve(jsonResponse([]));
+  });
+  const utilisateur = userEvent.setup();
+
+  render(
+    <MemoryRouter initialEntries={["/dossiers"]}>
+      <Routes>
+        <Route path="/dossiers" element={<DossiersPage onSessionExpiree={vi.fn()} />} />
+        <Route path="/dossiers/:id" element={<div>DÉTAIL DOSSIER</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation.");
+  await utilisateur.click(screen.getByRole("button", { name: "Nouveau dossier" }));
+  await utilisateur.type(screen.getByLabelText("Titre"), "Mon dossier");
+  await utilisateur.click(screen.getByRole("button", { name: "Créer" }));
+
+  const boutonCreation = await screen.findByRole("button", { name: "Création…" });
+  expect(boutonCreation).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Annuler" })).toBeDisabled();
+
+  resoudrePost(jsonResponse(note({ id: 9 }), 201));
+  expect(await screen.findByText("DÉTAIL DOSSIER")).toBeInTheDocument();
+});
+
+test("le bouton « Annuler » ferme la boîte sans appel réseau", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+  const utilisateur = userEvent.setup();
+
+  renderPage();
+
+  await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation.");
+  await utilisateur.click(screen.getByRole("button", { name: "Nouveau dossier" }));
+
+  const dialogue = screen.getByRole("dialog");
+  expect(dialogue).toBeInTheDocument();
+  expect(within(dialogue).getByRole("button", { name: "Annuler" })).toBeInTheDocument();
+
+  await utilisateur.click(within(dialogue).getByRole("button", { name: "Annuler" }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});

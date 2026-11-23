@@ -473,6 +473,26 @@ test("focus du h1 à l'arrivée sur une page vide après clic sur Dossiers", asy
   expect(await screen.findByRole("heading", { name: "Dossiers" })).toHaveFocus();
 });
 
+test("valideur : /dossiers affiche le titre « Dossiers » et l'état vide", async () => {
+  mockApi(VALIDEUR);
+  renderApp("/dossiers");
+
+  expect(await screen.findByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation."),
+  ).toBeInTheDocument();
+});
+
+test("admin : /dossiers affiche le titre « Dossiers » et l'état vide", async () => {
+  mockApi(ADMIN);
+  renderApp("/dossiers");
+
+  expect(await screen.findByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation."),
+  ).toBeInTheDocument();
+});
+
 test.each([
   [UTILISATEUR, "/depenses"],
   [UTILISATEUR, "/depenses/nouvelle"],
