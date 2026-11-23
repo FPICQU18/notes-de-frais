@@ -114,6 +114,8 @@ Elles font foi pour le style : **ne pas inventer d'autre direction visuelle**.
   aucun appel à un CDN de polices (PWA utilisable sans Google).
 - Montants formatés avec `Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" })`,
   toujours en chiffres tabulaires (`tabular-nums`).
+- Styles : classes Tailwind directement dans les composants. `index.css` ne contient que le thème
+  (variables) et les styles de base ; n'y ajoute plus de classes d'écran. L'existant reste tel quel.
 
 ### Couleurs
 | Rôle | Valeur |
