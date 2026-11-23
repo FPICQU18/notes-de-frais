@@ -29,6 +29,7 @@ export function DetailDepensePage({ onSessionExpiree }: Props) {
   const navigate = useNavigate();
   const [etat, setEtat] = useState<Etat>({ statut: "chargement" });
   const [tentative, setTentative] = useState(0);
+  const [messageConflit, setMessageConflit] = useState<string | null>(null);
 
   useEffect(() => {
     let actif = true;
@@ -93,6 +94,13 @@ export function DetailDepensePage({ onSessionExpiree }: Props) {
     setEtat({ statut: "chargement" });
     setTentative((valeur) => valeur + 1);
   }, []);
+  const gererConflit = useCallback(
+    (message: string) => {
+      setMessageConflit(message);
+      recharger();
+    },
+    [recharger],
+  );
   const reussir = useCallback(
     (annonce: string | null) => navigate("/depenses", { state: annonce === null ? null : { annonce } }),
     [navigate],
@@ -169,9 +177,10 @@ export function DetailDepensePage({ onSessionExpiree }: Props) {
       idDepense={etat.depense.id}
       valeurInitiale={valeurDepense(etat.depense)}
       lectureSeule={etat.lectureSeule}
+      messageConflit={messageConflit}
       onSessionExpiree={onSessionExpiree}
       onSucces={reussir}
-      onConflit={recharger}
+      onConflit={gererConflit}
       onIntrouvable={() => setEtat({ statut: "introuvable" })}
     />
   );

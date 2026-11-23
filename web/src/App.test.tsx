@@ -467,3 +467,37 @@ test("focus du h1 à l'arrivée sur une page vide après clic sur Dossiers", asy
 
   expect(await screen.findByRole("heading", { name: "Dossiers" })).toHaveFocus();
 });
+
+test.each([
+  [UTILISATEUR, "/depenses"],
+  [UTILISATEUR, "/depenses/nouvelle"],
+  [UTILISATEUR, "/depenses/1"],
+  [VALIDEUR, "/depenses"],
+  [VALIDEUR, "/depenses/nouvelle"],
+  [VALIDEUR, "/depenses/1"],
+  [ADMIN, "/depenses"],
+  [ADMIN, "/depenses/nouvelle"],
+  [ADMIN, "/depenses/1"],
+])(
+  "barre de navigation présente et utilisable sur %s pour %s",
+  async (utilisateur, url) => {
+    mockApi(utilisateur);
+    renderApp(url);
+
+    const nav = await screen.findByRole("navigation", {
+      name: "Navigation principale",
+    });
+    expect(within(nav).getByRole("link", { name: "Accueil" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Dépenses" })).toBeInTheDocument();
+    expect(
+      within(nav).getByRole("link", { name: "Ajouter une dépense" }),
+    ).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Dossiers" })).toBeInTheDocument();
+
+    if (utilisateur.role === "utilisateur") {
+      expect(within(nav).getByRole("link", { name: "Profil" })).toBeInTheDocument();
+    } else {
+      expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
+    }
+  },
+);

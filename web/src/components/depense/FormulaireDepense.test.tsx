@@ -381,3 +381,63 @@ test("la valeur de catégorie choisie est envoyée telle quelle", async () => {
   expect(corps.categorie).toBe("peage_parking");
   expect(corps.montant_centimes).toBe(800);
 });
+
+test("libellé composé uniquement d'espaces → « Le libellé est requis. », aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "   ");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(await screen.findByText("Le libellé est requis.")).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("montant exactement 100 000 € est accepté (10 000 000 centimes)", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(jsonResponse({ id: 1 }, 201));
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "100000");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const corps = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+  expect(corps.montant_centimes).toBe(10_000_000);
+});
+
+test("réponse 5xx : alerte avec le message de l'API puis « Réessayer » rejoue le POST", async () => {
+  let appels = 0;
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    appels += 1;
+    if (appels === 1) {
+      return jsonResponse({ detail: "Erreur interne du serveur." }, 500);
+    }
+    return jsonResponse({ id: 1 }, 201);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Erreur interne du serveur.");
+  expect(screen.getByLabelText("Montant")).toHaveValue("24,50");
+
+  await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const corps1 = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+  const corps2 = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+  expect(corps2).toEqual(corps1);
+});

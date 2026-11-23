@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes } from "react-router";
 
 import type { Depense } from "../api/client";
 import { DepensesPage } from "./DepensesPage";
@@ -169,4 +169,26 @@ test("chaque carte est un lien vers /depenses/:id", async () => {
 
   const lien = await screen.findByRole("link", { name: /Ticket/ });
   expect(lien).toHaveAttribute("href", "/depenses/42");
+});
+
+test("activation de la carte au clavier : la touche Espace ouvre le détail", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    jsonResponse([depense({ id: 42, libelle: "Ticket" })]),
+  );
+  const utilisateur = userEvent.setup();
+
+  render(
+    <MemoryRouter initialEntries={["/depenses"]}>
+      <Routes>
+        <Route path="/depenses" element={<DepensesPage onSessionExpiree={vi.fn()} />} />
+        <Route path="/depenses/:id" element={<div>DÉTAIL</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const lien = await screen.findByRole("link", { name: /Ticket/ });
+  lien.focus();
+  await utilisateur.keyboard(" ");
+
+  expect(await screen.findByText("DÉTAIL")).toBeInTheDocument();
 });

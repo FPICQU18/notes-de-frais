@@ -50,7 +50,9 @@ type Props = {
   onSessionExpiree: () => void;
   onSucces: (annonce: string | null) => void;
   /** 409 : le dossier n'est plus modifiable ; la page recharge en lecture seule. */
-  onConflit?: () => void;
+  onConflit?: (message: string) => void;
+  /** Message du serveur à afficher après un conflit 409 (survit au rechargement). */
+  messageConflit?: string | null;
   /** 404 : la dépense n'existe plus ; la page bascule sur l'écran dédié. */
   onIntrouvable?: () => void;
 };
@@ -106,6 +108,7 @@ export function FormulaireDepense({
   onSucces,
   onConflit,
   onIntrouvable,
+  messageConflit = null,
 }: Props) {
   const aujourdhuiIso = dateIsoParis(maintenant ?? new Date());
   const titre = mode === "creation" ? "Nouvelle dépense" : "Modifier la dépense";
@@ -287,9 +290,12 @@ export function FormulaireDepense({
         return;
       }
       if (attrape instanceof ApiError && attrape.status === 409) {
-        setErreurHorsChamp(attrape.message);
-        setEnvoiEnCours(false);
-        onConflit?.();
+        if (onConflit !== undefined) {
+          onConflit(attrape.message);
+        } else {
+          setErreurHorsChamp(attrape.message);
+          setEnvoiEnCours(false);
+        }
         return;
       }
       if (attrape instanceof ApiError && attrape.status === 404 && mode === "modification") {
@@ -340,9 +346,12 @@ export function FormulaireDepense({
         return;
       }
       if (attrape instanceof ApiError && attrape.status === 409) {
-        setConfirmationOuverte(false);
-        setErreurSuppression(null);
-        onConflit?.();
+        if (onConflit !== undefined) {
+          onConflit(attrape.message);
+        } else {
+          setConfirmationOuverte(false);
+          setErreurSuppression(attrape.message);
+        }
         return;
       }
       setErreurSuppression(
@@ -363,6 +372,15 @@ export function FormulaireDepense({
         >
           <Lock aria-hidden strokeWidth={2} className="mt-0.5 h-4 w-4 shrink-0" />
           <span>Cette dépense appartient à un dossier qui n'est plus modifiable.</span>
+        </div>
+      )}
+
+      {messageConflit !== null && messageConflit !== undefined && (
+        <div
+          role="alert"
+          className="mx-5 mt-4 flex items-start gap-3 rounded-[16px] bg-[var(--erreur-fond)] px-4 py-3 text-[13px] font-semibold leading-snug text-[var(--erreur-texte)]"
+        >
+          <span>{messageConflit}</span>
         </div>
       )}
 

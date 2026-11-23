@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
 import type { Depense, Note } from "../api/client";
+import { DepensesPage } from "./DepensesPage";
 import { DetailDepensePage } from "./DetailDepensePage";
 
 function jsonResponse(donnees: unknown, statut = 200): Response {
@@ -65,6 +66,24 @@ function renderDetail(options: { onSessionExpiree?: () => void } = {}) {
     </MemoryRouter>,
   );
   return { onSessionExpiree, ...utils };
+}
+
+/** Rend l'édition avec la vraie liste des dépenses en cible de navigation. */
+function renderDetailAvecListe(onSessionExpiree: () => void = vi.fn()) {
+  return render(
+    <MemoryRouter initialEntries={["/depenses/1"]}>
+      <Routes>
+        <Route
+          path="/depenses/:id"
+          element={<DetailDepensePage onSessionExpiree={onSessionExpiree} />}
+        />
+        <Route
+          path="/depenses"
+          element={<DepensesPage onSessionExpiree={onSessionExpiree} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 afterEach(() => {
@@ -233,4 +252,247 @@ test("suppression : confirmation puis DELETE, puis retour à la liste", async ()
   const deleteAppel = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
   expect(deleteAppel).toBeDefined();
   expect(String(deleteAppel![0])).toBe("/api/v1/depenses/1");
+});
+
+test("pré-remplissage : montant 10,00, date, catégorie présélectionnée, libellé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(
+          depense({
+            id: 1,
+            montant_centimes: 1000,
+            date_depense: "2020-06-15",
+            categorie: "transport",
+            libelle: "Taxi",
+          }),
+        ),
+      },
+    ]),
+  );
+
+  renderDetail();
+
+  await screen.findByRole("button", { name: "Enregistrer les modifications" });
+  expect(screen.getByLabelText("Montant")).toHaveValue("10,00");
+  expect(screen.getByLabelText("Date")).toHaveValue("2020-06-15");
+  expect(screen.getByLabelText("Libellé")).toHaveValue("Taxi");
+  expect(screen.getByRole("button", { name: "Transport" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});
+
+test("échec du chargement du statut (GET /notes) : lecture seule, aucun bouton d'action", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(depense({ id: 1, note_id: 5 })),
+      },
+      {
+        method: "GET",
+        url: "/api/v1/notes/5",
+        reponse: jsonResponse({ detail: "Erreur interne" }, 500),
+      },
+    ]),
+  );
+
+  renderDetail();
+
+  const bandeau = await screen.findByRole("status");
+  expect(bandeau).toHaveTextContent(
+    "Cette dépense appartient à un dossier qui n'est plus modifiable.",
+  );
+  expect(screen.getByLabelText("Montant")).toBeDisabled();
+  expect(
+    screen.queryByRole("button", { name: "Enregistrer les modifications" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Supprimer" })).not.toBeInTheDocument();
+});
+
+test("409 sur PATCH : message du serveur affiché et retour en lecture seule", async () => {
+  let appelsNote = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1" && method === "GET") {
+      return jsonResponse(depense({ id: 1, note_id: 5 }));
+    }
+    if (url === "/api/v1/notes/5" && method === "GET") {
+      appelsNote += 1;
+      return jsonResponse(
+        note({ id: 5, statut: appelsNote === 1 ? "brouillon" : "soumise" }),
+      );
+    }
+    if (url === "/api/v1/depenses/1" && method === "PATCH") {
+      return jsonResponse({ detail: "Le dossier n'est plus modifiable." }, 409);
+    }
+    return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
+  });
+  const utilisateur = userEvent.setup();
+
+  renderDetail();
+
+  const libelle = await screen.findByLabelText("Libellé");
+  await utilisateur.clear(libelle);
+  await utilisateur.type(libelle, "Nouveau");
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Le dossier n'est plus modifiable.");
+  expect(screen.getByLabelText("Montant")).toBeDisabled();
+  expect(
+    screen.queryByRole("button", { name: "Enregistrer les modifications" }),
+  ).not.toBeInTheDocument();
+});
+
+test("suppression annulée : aucun DELETE émis, le formulaire reste actif", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(depense({ id: 1 })),
+      },
+    ]),
+  );
+  const utilisateur = userEvent.setup();
+
+  renderDetail();
+
+  await utilisateur.click(await screen.findByRole("button", { name: "Supprimer" }));
+  const confirmation = await screen.findByRole("group", {
+    name: "Confirmation de suppression",
+  });
+  await utilisateur.click(within(confirmation).getByRole("button", { name: "Annuler" }));
+
+  expect(
+    screen.queryByRole("group", { name: "Confirmation de suppression" }),
+  ).not.toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  ).toBeEnabled();
+});
+
+test("401 sur PATCH : onSessionExpiree, pas de navigation", async () => {
+  const onSessionExpiree = vi.fn();
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(depense({ id: 1 })),
+      },
+      {
+        method: "PATCH",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse({ detail: "Session expirée." }, 401),
+      },
+    ]),
+  );
+  const utilisateur = userEvent.setup();
+
+  renderDetail({ onSessionExpiree });
+
+  const libelle = await screen.findByLabelText("Libellé");
+  await utilisateur.clear(libelle);
+  await utilisateur.type(libelle, "Nouveau");
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  expect(screen.queryByText("LISTE")).not.toBeInTheDocument();
+});
+
+test("401 sur DELETE : onSessionExpiree, pas de navigation", async () => {
+  const onSessionExpiree = vi.fn();
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(depense({ id: 1 })),
+      },
+      {
+        method: "DELETE",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse({ detail: "Session expirée." }, 401),
+      },
+    ]),
+  );
+  const utilisateur = userEvent.setup();
+
+  renderDetail({ onSessionExpiree });
+
+  await utilisateur.click(await screen.findByRole("button", { name: "Supprimer" }));
+  const confirmation = await screen.findByRole("group", {
+    name: "Confirmation de suppression",
+  });
+  await utilisateur.click(within(confirmation).getByRole("button", { name: "Supprimer" }));
+
+  await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  expect(screen.queryByText("LISTE")).not.toBeInTheDocument();
+});
+
+test("modification réussie : l'annonce « Dépense modifiée. » est portée à la liste", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(depense({ id: 1, libelle: "Ancien" })),
+      },
+      { method: "PATCH", url: "/api/v1/depenses/1", reponse: jsonResponse({ id: 1 }) },
+      { method: "GET", url: "/api/v1/depenses", reponse: jsonResponse([]) },
+    ]),
+  );
+  const utilisateur = userEvent.setup();
+
+  renderDetailAvecListe();
+
+  const libelle = await screen.findByLabelText("Libellé");
+  await utilisateur.clear(libelle);
+  await utilisateur.type(libelle, "Nouveau");
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  expect(await screen.findByRole("status")).toHaveTextContent("Dépense modifiée.");
+});
+
+test("suppression réussie : l'annonce « Dépense supprimée. » est portée à la liste", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    routeurDetail([
+      {
+        method: "GET",
+        url: "/api/v1/depenses/1",
+        reponse: jsonResponse(depense({ id: 1 })),
+      },
+      {
+        method: "DELETE",
+        url: "/api/v1/depenses/1",
+        reponse: new Response(null, { status: 204 }),
+      },
+      { method: "GET", url: "/api/v1/depenses", reponse: jsonResponse([]) },
+    ]),
+  );
+  const utilisateur = userEvent.setup();
+
+  renderDetailAvecListe();
+
+  await utilisateur.click(await screen.findByRole("button", { name: "Supprimer" }));
+  const confirmation = await screen.findByRole("group", {
+    name: "Confirmation de suppression",
+  });
+  await utilisateur.click(within(confirmation).getByRole("button", { name: "Supprimer" }));
+
+  expect(await screen.findByRole("status")).toHaveTextContent("Dépense supprimée.");
 });
