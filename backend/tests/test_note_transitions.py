@@ -24,6 +24,7 @@ FIELDS_NOTE = {
     "statut",
     "total_centimes",
     "nb_depenses",
+    "derniere_depense_le",
     "created_at",
     "updated_at",
 }

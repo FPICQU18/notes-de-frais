@@ -22,6 +22,7 @@ FIELDS_NOTE = {
     "statut",
     "total_centimes",
     "nb_depenses",
+    "derniere_depense_le",
     "created_at",
     "updated_at",
 }
@@ -289,6 +290,33 @@ def test_list_notes_sans_note_200_vide(client, db_session):
     assert response.json() == []
 
 
+def test_list_notes_derniere_depense_le_max_et_ordre(client, db_session):
+    user = _connect(client, db_session)
+    vieille = _make_note(
+        db_session, user, libelle="Vieille", created_at=datetime(2024, 1, 1, tzinfo=UTC)
+    )
+    sans_depense = _make_note(
+        db_session, user, libelle="Sans depense", created_at=datetime(2024, 3, 1, tzinfo=UTC)
+    )
+    _make_depense(
+        db_session, user, note_id=vieille.id, date_depense=date(2024, 1, 5), montant_centimes=1000
+    )
+    _make_depense(
+        db_session, user, note_id=vieille.id, date_depense=date(2024, 2, 20), montant_centimes=2000
+    )
+
+    response = client.get("/api/v1/notes")
+
+    assert response.status_code == 200
+    body = response.json()
+    # Ordre `created_at DESC` préservé : le dossier sans dépense (mars) reste
+    # avant le dossier plus ancien (janvier), sans influence de la date max.
+    assert [n["libelle"] for n in body] == ["Sans depense", "Vieille"]
+    by_id = {n["id"]: n for n in body}
+    assert by_id[vieille.id]["derniere_depense_le"] == "2024-02-20"
+    assert by_id[sans_depense.id]["derniere_depense_le"] is None
+
+
 # --- Détail ------------------------------------------------------------------
 
 
@@ -313,6 +341,28 @@ def test_get_note_200_avec_depenses_triees_et_total(client, db_session):
     assert body["nb_depenses"] == 3
     assert body["total_centimes"] == 2600
     assert [d["id"] for d in body["depenses"]] == [janvier.id, mars_a.id, mars_b.id]
+
+
+def test_get_note_200_derniere_depense_le(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    _make_depense(db_session, user, note_id=note.id, date_depense=date(2024, 1, 15))
+    _make_depense(db_session, user, note_id=note.id, date_depense=date(2024, 3, 10))
+
+    response = client.get(f"/api/v1/notes/{note.id}")
+
+    assert response.status_code == 200
+    assert response.json()["derniere_depense_le"] == "2024-03-10"
+
+
+def test_get_note_200_derniere_depense_le_nulle_sans_depense(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+
+    response = client.get(f"/api/v1/notes/{note.id}")
+
+    assert response.status_code == 200
+    assert response.json()["derniere_depense_le"] is None
 
 
 def test_acces_note_autre_utilisateur_404(client, db_session):

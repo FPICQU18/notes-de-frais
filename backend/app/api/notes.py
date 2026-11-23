@@ -8,7 +8,7 @@ d'existence). Les totaux (`total_centimes`, `nb_depenses`) sont calculés par le
 serveur en une requête agrégée, jamais par le client.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 import sqlalchemy as sa
@@ -60,14 +60,17 @@ def _ensure_brouillon(note: Note) -> None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_NON_BROUILLON)
 
 
-def _note_read(note: Note, total_centimes: int, nb_depenses: int) -> NoteRead:
-    """Construit un `NoteRead` à partir du dossier et de ses totaux calculés."""
+def _note_read(
+    note: Note, total_centimes: int, nb_depenses: int, derniere_depense_le: date | None
+) -> NoteRead:
+    """Construit un `NoteRead` à partir du dossier et de ses agrégats calculés."""
     return NoteRead(
         id=note.id,
         libelle=note.libelle,
         statut=note.statut,
         total_centimes=total_centimes,
         nb_depenses=nb_depenses,
+        derniere_depense_le=derniere_depense_le,
         created_at=note.created_at,
         updated_at=note.updated_at,
     )
@@ -98,7 +101,8 @@ def create_note(payload: NoteCreate, db: DbSession, current_user: CurrentUser) -
     db.commit()
 
     total_centimes = sum(depense.montant_centimes for depense in depenses)
-    return _note_read(note, total_centimes, len(depenses))
+    derniere_depense_le = max((depense.date_depense for depense in depenses), default=None)
+    return _note_read(note, total_centimes, len(depenses), derniere_depense_le)
 
 
 @router.get("", response_model=list[NoteRead])
@@ -113,6 +117,7 @@ def list_notes(db: DbSession, current_user: CurrentUser) -> list[NoteRead]:
             Note,
             sa.func.coalesce(sa.func.sum(Depense.montant_centimes), 0).label("total_centimes"),
             sa.func.count(Depense.id).label("nb_depenses"),
+            sa.func.max(Depense.date_depense).label("derniere_depense_le"),
         )
         .outerjoin(Depense, Depense.note_id == Note.id)
         .where(Note.user_id == current_user.id)
@@ -120,8 +125,8 @@ def list_notes(db: DbSession, current_user: CurrentUser) -> list[NoteRead]:
         .order_by(Note.created_at.desc(), Note.id.desc())
     )
     return [
-        _note_read(note, total_centimes, nb_depenses)
-        for note, total_centimes, nb_depenses in db.execute(stmt).all()
+        _note_read(note, total_centimes, nb_depenses, derniere_depense_le)
+        for note, total_centimes, nb_depenses, derniere_depense_le in db.execute(stmt).all()
     ]
 
 
@@ -137,12 +142,14 @@ def get_note(note_id: int, db: DbSession, current_user: CurrentUser) -> NoteDeta
         ).scalars()
     )
     total_centimes = sum(depense.montant_centimes for depense in depenses)
+    derniere_depense_le = max((depense.date_depense for depense in depenses), default=None)
     return NoteDetail(
         id=note.id,
         libelle=note.libelle,
         statut=note.statut,
         total_centimes=total_centimes,
         nb_depenses=len(depenses),
+        derniere_depense_le=derniere_depense_le,
         created_at=note.created_at,
         updated_at=note.updated_at,
         depenses=[DepenseRead.model_validate(depense) for depense in depenses],
@@ -159,15 +166,14 @@ def update_note(
     note.libelle = payload.libelle
     db.commit()
     db.refresh(note)
-    total_centimes = db.execute(
-        select(sa.func.coalesce(sa.func.sum(Depense.montant_centimes), 0)).where(
-            Depense.note_id == note.id
-        )
-    ).scalar_one()
-    nb_depenses = db.execute(
-        select(sa.func.count(Depense.id)).where(Depense.note_id == note.id)
-    ).scalar_one()
-    return _note_read(note, total_centimes, nb_depenses)
+    total_centimes, nb_depenses, derniere_depense_le = db.execute(
+        select(
+            sa.func.coalesce(sa.func.sum(Depense.montant_centimes), 0),
+            sa.func.count(Depense.id),
+            sa.func.max(Depense.date_depense),
+        ).where(Depense.note_id == note.id)
+    ).one()
+    return _note_read(note, total_centimes, nb_depenses, derniere_depense_le)
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)

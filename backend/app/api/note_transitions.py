@@ -97,18 +97,20 @@ def _compter_depenses(db: OrmSession, note_id: int) -> int:
 
 def _note_read(db: OrmSession, note: Note) -> NoteRead:
     """Construit un `NoteRead` à partir du dossier et de ses totaux calculés."""
-    total_centimes = db.execute(
-        select(sa.func.coalesce(sa.func.sum(Depense.montant_centimes), 0)).where(
-            Depense.note_id == note.id
-        )
-    ).scalar_one()
-    nb_depenses = _compter_depenses(db, note.id)
+    total_centimes, nb_depenses, derniere_depense_le = db.execute(
+        select(
+            sa.func.coalesce(sa.func.sum(Depense.montant_centimes), 0),
+            sa.func.count(Depense.id),
+            sa.func.max(Depense.date_depense),
+        ).where(Depense.note_id == note.id)
+    ).one()
     return NoteRead(
         id=note.id,
         libelle=note.libelle,
         statut=note.statut,
         total_centimes=total_centimes,
         nb_depenses=nb_depenses,
+        derniere_depense_le=derniere_depense_le,
         created_at=note.created_at,
         updated_at=note.updated_at,
     )

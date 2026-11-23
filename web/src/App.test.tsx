@@ -73,6 +73,9 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/depenses") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (url.endsWith("/api/v1/notes") && methode === "GET") {
+        return jsonResponse([]);
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     },
   );
@@ -338,7 +341,9 @@ test("utilisateur : cliquer Dossiers affiche le titre et marque l'onglet actif",
   await utilisateur.click(screen.getByRole("link", { name: "Dossiers" }));
 
   expect(await screen.findByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation."),
+  ).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Dossiers" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -466,6 +471,26 @@ test("focus du h1 à l'arrivée sur une page vide après clic sur Dossiers", asy
   await utilisateur.click(screen.getByRole("link", { name: "Dossiers" }));
 
   expect(await screen.findByRole("heading", { name: "Dossiers" })).toHaveFocus();
+});
+
+test("valideur : /dossiers affiche le titre « Dossiers » et l'état vide", async () => {
+  mockApi(VALIDEUR);
+  renderApp("/dossiers");
+
+  expect(await screen.findByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation."),
+  ).toBeInTheDocument();
+});
+
+test("admin : /dossiers affiche le titre « Dossiers » et l'état vide", async () => {
+  mockApi(ADMIN);
+  renderApp("/dossiers");
+
+  expect(await screen.findByRole("heading", { name: "Dossiers" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("Aucun dossier. Regroupez vos dépenses pour les envoyer en validation."),
+  ).toBeInTheDocument();
 });
 
 test.each([

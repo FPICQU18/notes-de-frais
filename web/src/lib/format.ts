@@ -111,3 +111,20 @@ export function initiales(nom: string): string {
   const mots = nom.trim().split(/\s+/).filter(Boolean);
   return mots.slice(0, 2).map((mot) => mot.charAt(0).toUpperCase()).join("") || "?";
 }
+
+/**
+ * Période d'un dossier depuis sa date de dépense la plus récente : « Novembre 2026 ».
+ * `null` (dossier sans dépense) → « Aucune dépense ».
+ */
+export function formatPeriode(dateIso: string | null): string {
+  if (dateIso === null) return "Aucune dépense";
+  const [annee, mois] = dateIso.split("-").map(Number);
+  const nom = nomMois(mois);
+  if (nom === "") return "Aucune dépense";
+  return `${nom.charAt(0).toUpperCase()}${nom.slice(1)} ${annee}`;
+}
+
+/** Nombre de dépenses d'un dossier : « 0 dépense », « 1 dépense », « N dépenses ». */
+export function formatNbDepenses(nb: number): string {
+  return nb >= 2 ? `${nb} dépenses` : `${nb} dépense`;
+}
