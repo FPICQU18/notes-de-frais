@@ -2,7 +2,16 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import auth, depenses, health, note_transitions, notes, users, validation
+from app.api import (
+    auth,
+    depenses,
+    health,
+    justificatifs,
+    note_transitions,
+    notes,
+    users,
+    validation,
+)
 
 app = FastAPI(
     title="Notes de frais",
@@ -15,6 +24,7 @@ app.include_router(health.router, prefix="/api")
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(depenses.router)
+app.include_router(justificatifs.router)
 app.include_router(notes.router)
 app.include_router(note_transitions.router)
 app.include_router(validation.router)
