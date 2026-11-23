@@ -13,12 +13,14 @@ import {
   apiDelete,
   apiPatch,
   apiPost,
+  apiUploadJustificatif,
   erreursDeDetail,
   type Categorie,
 } from "../../api/client";
 import { CATEGORIES } from "../../lib/categories";
 import { dateIsoParis } from "../../lib/format";
 import { formaterMontantSaisie, lireMontantCentimes } from "../../lib/montant";
+import { BlocJustificatif } from "./BlocJustificatif";
 
 type Champ = "montant" | "date" | "categorie" | "libelle";
 
@@ -55,6 +57,8 @@ type Props = {
   messageConflit?: string | null;
   /** 404 : la dépense n'existe plus ; la page bascule sur l'écran dédié. */
   onIntrouvable?: () => void;
+  /** Meilleur effort : déclenche le sélecteur de photo au montage (?scan=1). */
+  declencherAuMontage?: boolean;
 };
 
 const CHAMP_VERS_CLE: Record<string, Champ> = {
@@ -109,6 +113,7 @@ export function FormulaireDepense({
   onConflit,
   onIntrouvable,
   messageConflit = null,
+  declencherAuMontage = false,
 }: Props) {
   const aujourdhuiIso = dateIsoParis(maintenant ?? new Date());
   const titre = mode === "creation" ? "Nouvelle dépense" : "Modifier la dépense";
@@ -137,6 +142,10 @@ export function FormulaireDepense({
   const [confirmationOuverte, setConfirmationOuverte] = useState(false);
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
   const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
+
+  const [fichier, setFichier] = useState<File | null>(null);
+  const [idDepenseCree, setIdDepenseCree] = useState<number | null>(null);
+  const [erreurJustificatif, setErreurJustificatif] = useState<string | null>(null);
 
   const refMontant = useRef<HTMLInputElement>(null);
   const refDate = useRef<HTMLInputElement>(null);
@@ -259,6 +268,52 @@ export function FormulaireDepense({
     if (premier !== undefined) focusChamp(premier);
   }
 
+  type ResultatJustificatif = "succes" | "reessayable" | "quitte";
+
+  async function tenterJustificatif(id: number): Promise<ResultatJustificatif> {
+    if (fichier === null) return "succes";
+    setErreurJustificatif(null);
+    try {
+      await apiUploadJustificatif(id, fichier);
+      return "succes";
+    } catch (attrape) {
+      if (attrape instanceof ApiError && attrape.status === 401) {
+        onSessionExpiree();
+        return "quitte";
+      }
+      if (attrape instanceof ApiError && attrape.status === 404) {
+        onIntrouvable?.();
+        return "quitte";
+      }
+      if (attrape instanceof ApiError && attrape.status === 409) {
+        if (onConflit !== undefined) {
+          onConflit(attrape.message);
+          return "quitte";
+        }
+        setErreurJustificatif(attrape.message);
+        return "reessayable";
+      }
+      setErreurJustificatif(
+        attrape instanceof ApiError ? attrape.message : "Une erreur est survenue.",
+      );
+      return "reessayable";
+    }
+  }
+
+  async function retenterJustificatif() {
+    if (envoiEnCours) return;
+    const id = idDepenseCree ?? idDepense;
+    if (id === undefined || id === null) return;
+    setEnvoiEnCours(true);
+    const resultat = await tenterJustificatif(id);
+    if (resultat === "quitte") return;
+    if (resultat === "reessayable") {
+      setEnvoiEnCours(false);
+      return;
+    }
+    onSucces(mode === "creation" ? "Dépense enregistrée." : "Dépense modifiée.");
+  }
+
   async function envoyer() {
     if (envoiEnCours || desactive) return;
     if (!valider()) return;
@@ -266,18 +321,47 @@ export function FormulaireDepense({
     setEnvoiEnCours(true);
     setErreurEnvoi(null);
     setErreurHorsChamp(null);
+    setErreurJustificatif(null);
     try {
       if (mode === "creation") {
-        await apiPost("/v1/depenses", corps);
+        // POST déjà réussi lors d'une tentative précédente : on ne recrée pas
+        // la dépense, on ne rejoue que l'envoi du justificatif.
+        if (idDepenseCree !== null) {
+          const resultat = await tenterJustificatif(idDepenseCree);
+          if (resultat === "quitte") return;
+          if (resultat === "reessayable") {
+            setEnvoiEnCours(false);
+            return;
+          }
+          onSucces("Dépense enregistrée.");
+          return;
+        }
+        const depense = await apiPost<{ id: number }>("/v1/depenses", corps);
+        setIdDepenseCree(depense.id);
+        const resultat = await tenterJustificatif(depense.id);
+        if (resultat === "quitte") return;
+        if (resultat === "reessayable") {
+          setEnvoiEnCours(false);
+          return;
+        }
         onSucces("Dépense enregistrée.");
         return;
       }
       const diff = diffModification(corps);
-      if (Object.keys(diff).length === 0) {
+      const aDiff = Object.keys(diff).length > 0;
+      if (aDiff) {
+        await apiPatch(`/v1/depenses/${idDepense}`, diff);
+      }
+      const resultat = await tenterJustificatif(idDepense as number);
+      if (resultat === "quitte") return;
+      if (resultat === "reessayable") {
+        setEnvoiEnCours(false);
+        return;
+      }
+      if (!aDiff && fichier === null) {
         onSucces(null);
         return;
       }
-      await apiPatch(`/v1/depenses/${idDepense}`, diff);
       onSucces("Dépense modifiée.");
     } catch (attrape) {
       if (attrape instanceof ApiError && attrape.status === 401) {
@@ -530,6 +614,21 @@ export function FormulaireDepense({
           )}
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-bold text-[var(--muted-foreground)]">
+            Justificatif
+          </span>
+          <BlocJustificatif
+            mode={mode}
+            idDepense={idDepense}
+            desactive={desactive}
+            fichierChoisi={fichier}
+            onFichierChoisi={setFichier}
+            declencherAuMontage={declencherAuMontage}
+            onSessionExpiree={onSessionExpiree}
+          />
+        </div>
+
         {mode === "modification" && !desactive && (
           <div className="mt-[10px]">
             {confirmationOuverte ? (
@@ -612,6 +711,23 @@ export function FormulaireDepense({
                 <button
                   type="button"
                   onClick={() => void envoyer()}
+                  className="h-11 rounded-[16px] bg-[var(--card)] px-3 text-[14px] font-bold text-[var(--erreur-texte)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                >
+                  Réessayer
+                </button>
+              </div>
+            )}
+            {erreurJustificatif !== null && (
+              <div className="flex flex-col gap-2.5 rounded-[16px] bg-[var(--erreur-fond)] p-3">
+                <p
+                  role="alert"
+                  className="m-0 text-[13px] font-semibold text-[var(--erreur-texte)]"
+                >
+                  {erreurJustificatif}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void retenterJustificatif()}
                   className="h-11 rounded-[16px] bg-[var(--card)] px-3 text-[14px] font-bold text-[var(--erreur-texte)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
                 >
                   Réessayer

@@ -44,6 +44,11 @@ function routeurDetail(routes: Array<{ method: string; url: string; reponse: Res
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
+    // Le bloc justificatif, en modification active, sonde l'existence du fichier.
+    if (method === "GET" && /^\/api\/v1\/depenses\/\d+\/justificatif$/.test(url)) {
+      const explicite = routes.find((r) => r.method === method && r.url === url);
+      return explicite?.reponse ?? jsonResponse({ detail: "Introuvable." }, 404);
+    }
     const trouve = routes.find((r) => r.method === method && r.url === url);
     if (trouve === undefined) {
       return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
@@ -110,7 +115,7 @@ test("note_id null : aucun appel à /notes, formulaire de modification actif", a
     screen.getByRole("heading", { name: "Modifier la dépense" }),
   ).toBeInTheDocument();
   expect(montant).toBeEnabled();
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(String(fetchMock.mock.calls[0][0])).toBe("/api/v1/depenses/1");
 });
 
@@ -170,12 +175,17 @@ test("404 → écran « Dépense introuvable. » avec lien retour", async () => 
 
 test("erreur réseau : alerte + « Réessayer » relance le GET", async () => {
   let appels = 0;
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     appels += 1;
     if (appels === 1) {
       throw new Error("réseau");
     }
-    return jsonResponse(depense({ id: 1 }));
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1" && method === "GET") {
+      return jsonResponse(depense({ id: 1 }));
+    }
+    return jsonResponse({ detail: `Route inattendue : ${method} ${url}` }, 500);
   });
   const utilisateur = userEvent.setup();
 
@@ -184,7 +194,7 @@ test("erreur réseau : alerte + « Réessayer » relance le GET", async () => {
   expect(await screen.findByRole("alert")).toBeInTheDocument();
   await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   expect(
     await screen.findByRole("heading", { name: "Modifier la dépense" }),
   ).toBeInTheDocument();
@@ -375,7 +385,7 @@ test("suppression annulée : aucun DELETE émis, le formulaire reste actif", asy
   expect(
     screen.queryByRole("group", { name: "Confirmation de suppression" }),
   ).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(
     screen.getByRole("button", { name: "Enregistrer les modifications" }),
   ).toBeEnabled();

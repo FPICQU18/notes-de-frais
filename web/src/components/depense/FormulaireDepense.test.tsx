@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
 import type { Categorie } from "../../api/client";
-import { FormulaireDepense } from "./FormulaireDepense";
+import { FormulaireDepense, type ValeurDepense } from "./FormulaireDepense";
 
 function jsonResponse(donnees: unknown, statut = 200): Response {
   return new Response(JSON.stringify(donnees), {
@@ -42,6 +42,36 @@ async function remplirFormulaireValide(utilisateur: ReturnType<typeof userEvent.
   await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
   await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
 }
+
+const VALEUR_INITIALE: ValeurDepense = {
+  libelle: "Déjeuner",
+  date_depense: "2026-11-15",
+  montant_centimes: 2450,
+  categorie: "repas",
+};
+
+function renderFormulaireModification(options: Options & { idDepense?: number } = {}) {
+  const onSessionExpiree = options.onSessionExpiree ?? vi.fn();
+  const onSucces = options.onSucces ?? vi.fn();
+  const utils = render(
+    <MemoryRouter>
+      <FormulaireDepense
+        mode="modification"
+        idDepense={options.idDepense ?? 1}
+        valeurInitiale={VALEUR_INITIALE}
+        maintenant={options.maintenant ?? MAINTENANT}
+        onSessionExpiree={onSessionExpiree}
+        onSucces={onSucces}
+      />
+    </MemoryRouter>,
+  );
+  return { onSessionExpiree, onSucces, ...utils };
+}
+
+beforeEach(() => {
+  URL.createObjectURL = vi.fn(() => "blob:apercu-ticket");
+  URL.revokeObjectURL = vi.fn();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -440,4 +470,127 @@ test("réponse 5xx : alerte avec le message de l'API puis « Réessayer » rejou
   const corps1 = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
   const corps2 = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
   expect(corps2).toEqual(corps1);
+});
+
+test("création avec photo : POST puis PUT du justificatif, puis « Dépense enregistrée. »", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (entree, init) => {
+      const url = String(entree);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === "/api/v1/depenses" && method === "POST") {
+        return jsonResponse({ id: 42 }, 201);
+      }
+      if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+        return jsonResponse({ nom_fichier: "ticket.png" });
+      }
+      return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+    });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const [urlPost, initPost] = fetchMock.mock.calls[0];
+  expect(String(urlPost)).toBe("/api/v1/depenses");
+  expect(initPost?.method).toBe("POST");
+
+  const [urlPut, initPut] = fetchMock.mock.calls[1];
+  expect(String(urlPut)).toBe("/api/v1/depenses/42/justificatif");
+  expect(initPut?.method).toBe("PUT");
+  expect(initPut?.body).toBeInstanceOf(FormData);
+  expect((initPut?.body as FormData).get("fichier")).toBe(fichier);
+});
+
+test("création : PUT du justificatif échoue (422) → pas de recréation, « Réessayer » ne rejoue que le PUT", async () => {
+  let appelsPut = 0;
+  let appelsPost = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      appelsPost += 1;
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      appelsPut += 1;
+      if (appelsPut === 1) {
+        return jsonResponse(
+          { detail: "Format de justificatif non pris en charge (JPEG, PNG, HEIC ou PDF)." },
+          422,
+        );
+      }
+      return jsonResponse({ nom_fichier: "ticket.png" });
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent(
+    "Format de justificatif non pris en charge (JPEG, PNG, HEIC ou PDF).",
+  );
+  expect(onSucces).not.toHaveBeenCalled();
+  expect(appelsPost).toBe(1);
+
+  await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+  expect(appelsPost).toBe(1);
+  expect(appelsPut).toBe(2);
+});
+
+test("modification : nouvelle photo, aucun champ modifié → pas de PATCH, PUT du justificatif", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (entree, init) => {
+      const url = String(entree);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === "/api/v1/depenses/1/justificatif" && method === "GET") {
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }
+      if (url === "/api/v1/depenses/1/justificatif" && method === "PUT") {
+        return jsonResponse({ nom_fichier: "ticket.png" });
+      }
+      return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+    });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaireModification({ onSucces });
+
+  // Attendre la résolution du GET du justificatif (404 → « aucune photo jointe »).
+  expect(await screen.findByText("Aucune photo jointe")).toBeInTheDocument();
+
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense modifiée."));
+
+  const methodes = fetchMock.mock.calls.map(([, init]) =>
+    (init?.method ?? "GET").toUpperCase(),
+  );
+  expect(methodes).not.toContain("PATCH");
+  expect(methodes).toContain("PUT");
 });

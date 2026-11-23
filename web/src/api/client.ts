@@ -164,3 +164,67 @@ export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 export function apiDelete(path: string): Promise<void> {
   return requete<void>("DELETE", path);
 }
+
+/** Métadonnées du justificatif renvoyées par le PUT et le GET dédiés. */
+export interface JustificatifRead {
+  nom_fichier: string;
+  content_type: string;
+  taille_octets: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Envoie (ou remplace) le justificatif d'une dépense en `multipart/form-data`,
+ * dans le champ `fichier`. Passe volontairement à côté de `requete()` qui force
+ * un corps JSON : on laisse le navigateur poser lui-même la frontière multipart.
+ */
+export async function apiUploadJustificatif(
+  idDepense: number,
+  fichier: File,
+): Promise<JustificatifRead> {
+  const corps = new FormData();
+  corps.append("fichier", fichier);
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/depenses/${idDepense}/justificatif`, {
+      method: "PUT",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      body: corps,
+    });
+  } catch {
+    throw new ApiError(0, MESSAGE_RESEAU);
+  }
+  if (!response.ok) {
+    const { message, detail } = await lireErreur(response);
+    throw new ApiError(response.status, message, detail);
+  }
+  return (await response.json()) as JustificatifRead;
+}
+
+/**
+ * Télécharge le justificatif d'une dépense. Renvoie `null` quand il n'existe
+ * pas (404) ; sinon, la réponse binaire brute, dont l'`Content-Type` dit s'il
+ * s'agit d'une image ou d'un PDF. Même mapping d'erreurs que les autres helpers.
+ */
+export async function apiGetJustificatif(idDepense: number): Promise<Response | null> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/depenses/${idDepense}/justificatif`, {
+      method: "GET",
+      headers: { Accept: "application/octet-stream, application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, MESSAGE_RESEAU);
+  }
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const { message, detail } = await lireErreur(response);
+    throw new ApiError(response.status, message, detail);
+  }
+  return response;
+}
