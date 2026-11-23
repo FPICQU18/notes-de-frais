@@ -32,3 +32,16 @@ export const CATEGORIES: CategorieOption[] = [
   { valeur: "fournitures", libelle: "Fournitures", icone: ShoppingBag },
   { valeur: "autre", libelle: "Autre", icone: Receipt },
 ];
+
+/** Libellé français d'une catégorie (ex. `peage_parking` → « Péage/Parking »). */
+export function libelleCategorie(valeur: Categorie): string {
+  return CATEGORIES.find((option) => option.valeur === valeur)?.libelle ?? valeur;
+}
+
+/**
+ * Clé CSS d'une catégorie pour les variables `--categorie-…` : le seul écart
+ * entre la valeur métier et la variable CSS est `peage_parking` → `peage-parking`.
+ */
+export function cleCategorie(valeur: Categorie): string {
+  return valeur === "peage_parking" ? "peage-parking" : valeur;
+}

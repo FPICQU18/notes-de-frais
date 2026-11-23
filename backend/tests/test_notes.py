@@ -554,6 +554,122 @@ def test_ajout_note_non_brouillon_409(client, db_session):
     assert db_session.get(Depense, depense.id).note_id is None
 
 
+# --- Ajout de plusieurs dépenses (batch, atomique) ---------------------------
+
+
+def test_ajout_depenses_batch_204(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    a = _make_depense(db_session, user, montant_centimes=1000)
+    b = _make_depense(db_session, user, montant_centimes=2000)
+    c = _make_depense(db_session, user, montant_centimes=3000)
+
+    response = client.post(
+        f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": [a.id, b.id, c.id]}
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert db_session.get(Depense, a.id).note_id == note.id
+    assert db_session.get(Depense, b.id).note_id == note.id
+    assert db_session.get(Depense, c.id).note_id == note.id
+
+
+def test_ajout_depenses_batch_une_seule_204(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    depense = _make_depense(db_session, user)
+
+    response = client.post(f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": [depense.id]})
+
+    assert response.status_code == 204
+    assert db_session.get(Depense, depense.id).note_id == note.id
+
+
+def test_ajout_depenses_batch_atomique_depense_inexistante_404(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    a = _make_depense(db_session, user)
+
+    response = client.post(
+        f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": [a.id, 999999]}
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Dépense introuvable."}
+    assert db_session.get(Depense, a.id).note_id is None
+
+
+def test_ajout_depenses_batch_atomique_depense_autre_utilisateur_404(client, db_session):
+    user = _connect(client, db_session)
+    autre = _make_user(db_session, email="autre@example.com")
+    note = _make_note(db_session, user)
+    a = _make_depense(db_session, user)
+    depense_autre = _make_depense(db_session, autre)
+
+    response = client.post(
+        f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": [a.id, depense_autre.id]}
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Dépense introuvable."}
+    assert db_session.get(Depense, a.id).note_id is None
+    assert db_session.get(Depense, depense_autre.id).note_id is None
+
+
+def test_ajout_depenses_batch_atomique_deja_rattachee_409(client, db_session):
+    user = _connect(client, db_session)
+    note_origine = _make_note(db_session, user)
+    note_cible = _make_note(db_session, user)
+    a = _make_depense(db_session, user)
+    b = _make_depense(db_session, user, note_id=note_origine.id)
+
+    response = client.post(
+        f"/api/v1/notes/{note_cible.id}/depenses", json={"depense_ids": [a.id, b.id]}
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "La dépense est déjà rattachée à un dossier."
+    assert db_session.get(Depense, a.id).note_id is None
+    assert db_session.get(Depense, b.id).note_id == note_origine.id
+
+
+@pytest.mark.parametrize("depense_ids", [[], [1, 1]])
+def test_ajout_depenses_batch_ids_vide_ou_dupliques_422(client, db_session, depense_ids):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    depense = _make_depense(db_session, user)
+    ids = [depense.id, depense.id] if len(depense_ids) == 2 else []
+
+    response = client.post(f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": ids})
+
+    assert response.status_code == 422
+    assert db_session.get(Depense, depense.id).note_id is None
+
+
+def test_ajout_depenses_batch_note_non_brouillon_409(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user, statut="soumise")
+    depense = _make_depense(db_session, user)
+
+    response = client.post(f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": [depense.id]})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Le dossier n'est modifiable qu'au statut brouillon."
+    assert db_session.get(Depense, depense.id).note_id is None
+
+
+def test_ajout_depenses_batch_note_autre_utilisateur_404(client, db_session):
+    _connect(client, db_session)
+    autre = _make_user(db_session, email="autre@example.com")
+    note = _make_note(db_session, autre)
+
+    response = client.post(f"/api/v1/notes/{note.id}/depenses", json={"depense_ids": [1]})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Note introuvable."}
+
+
 # --- Retrait d'une dépense ---------------------------------------------------
 
 
@@ -621,6 +737,7 @@ def test_retrait_note_non_brouillon_409(client, db_session):
         ("DELETE", "/api/v1/notes/1", None),
         ("POST", "/api/v1/notes/1/depenses/1", None),
         ("DELETE", "/api/v1/notes/1/depenses/1", None),
+        ("POST", "/api/v1/notes/1/depenses", {"depense_ids": [1]}),
     ],
 )
 def test_toutes_routes_sans_cookie_401(client, db_session, method, path, payload):

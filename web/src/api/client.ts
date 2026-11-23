@@ -47,6 +47,26 @@ export interface Note {
   updated_at: string;
 }
 
+/** Détail d'un dossier : la note et ses dépenses rattachées, triées par le serveur. */
+export interface NoteDetail extends Note {
+  depenses: Depense[];
+}
+
+export interface TransitionActeur {
+  id: number;
+  display_name: string;
+}
+
+/** Une transition du circuit de validation, avec son acteur. */
+export interface TransitionRead {
+  id: number;
+  acteur: TransitionActeur;
+  ancien_statut: string;
+  nouveau_statut: string;
+  motif: string | null;
+  created_at: string;
+}
+
 export const MESSAGE_RESEAU = "Serveur injoignable. Vérifiez votre connexion.";
 export const MESSAGE_GENERIQUE = "Une erreur est survenue.";
 

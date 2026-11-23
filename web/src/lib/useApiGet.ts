@@ -11,6 +11,7 @@ export function useApiGet<T>(path: string, onSessionExpiree: () => void) {
   const [donnees, setDonnees] = useState<T | null>(null);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [erreurStatus, setErreurStatus] = useState<number | null>(null);
   const [tentative, setTentative] = useState(0);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export function useApiGet<T>(path: string, onSessionExpiree: () => void) {
           onSessionExpiree();
           return;
         }
+        setErreurStatus(attrape instanceof ApiError ? attrape.status : 0);
         setErreur(
           attrape instanceof ApiError ? attrape.message : "Une erreur est survenue.",
         );
@@ -40,8 +42,9 @@ export function useApiGet<T>(path: string, onSessionExpiree: () => void) {
   const reessayer = useCallback(() => {
     setChargement(true);
     setErreur(null);
+    setErreurStatus(null);
     setTentative((valeur) => valeur + 1);
   }, []);
 
-  return { donnees, chargement, erreur, reessayer };
+  return { donnees, chargement, erreur, erreurStatus, reessayer };
 }
