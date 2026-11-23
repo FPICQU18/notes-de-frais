@@ -38,11 +38,18 @@ function statutDeUrl(url: string): string | null {
   return match ? match[1] : null;
 }
 
-function renderPage(options: { utilisateur?: UserRead; onSessionExpiree?: () => void } = {}) {
+function renderPage(options: { utilisateur?: UserRead; onSessionExpiree?: () => void; annonce?: string } = {}) {
   const utilisateur = options.utilisateur ?? VALIDEUR;
   const onSessionExpiree = options.onSessionExpiree ?? vi.fn();
   const utils = render(
-    <MemoryRouter initialEntries={["/validation"]}>
+    <MemoryRouter
+      initialEntries={[
+        {
+          pathname: "/validation",
+          state: options.annonce === undefined ? undefined : { annonce: options.annonce },
+        },
+      ]}
+    >
       <ValidationPage utilisateur={utilisateur} onSessionExpiree={onSessionExpiree} />
     </MemoryRouter>,
   );
@@ -66,6 +73,27 @@ test("au montage : onglet « À traiter » actif et un seul appel statut=soumise
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(String(fetchMock.mock.calls[0][0])).toBe("/api/v1/validation/notes?statut=soumise");
+});
+
+test.each(["Dossier validé.", "Dossier refusé."])(
+  "annonce « %s » portée par la navigation : rendue dans un role=status",
+  async (annonce) => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+    renderPage({ annonce });
+
+    expect(await screen.findByRole("status")).toHaveTextContent(annonce);
+    // L'annonce cohabite avec le reste de la page (onglets et état vide).
+    expect(screen.getByRole("tab", { name: "À traiter" })).toBeInTheDocument();
+    expect(screen.getByText("Aucun dossier à traiter.")).toBeInTheDocument();
+  },
+);
+
+test("sans annonce : aucun role=status n'est rendu", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+  renderPage();
+
+  await screen.findByText("Aucun dossier à traiter.");
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
 
 test("activer un onglet déclenche un unique appel ; revenir ne relance pas", async () => {

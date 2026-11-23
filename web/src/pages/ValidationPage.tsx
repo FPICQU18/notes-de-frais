@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Check } from "lucide-react";
+import { useLocation } from "react-router";
 
 import {
   ApiError,
@@ -50,6 +51,9 @@ export function ValidationPage({ utilisateur, onSessionExpiree }: Props) {
   const refTitre = useRef<HTMLHeadingElement>(null);
   const refsOnglets = useRef<(HTMLButtonElement | null)[]>([]);
   const dejaDemandes = useRef<Set<StatutValidation>>(new Set());
+
+  const location = useLocation();
+  const annonce = (location.state as { annonce?: string } | null)?.annonce ?? null;
 
   const [ongletActif, setOngletActif] = useState<StatutValidation>("soumise");
   const [etats, setEtats] = useState<Record<StatutValidation, EtatOnglet>>({
@@ -150,6 +154,15 @@ export function ValidationPage({ utilisateur, onSessionExpiree }: Props) {
           Validation
         </h1>
       </header>
+
+      {annonce !== null && (
+        <p
+          role="status"
+          className="m-0 mb-4 rounded-[16px] bg-[var(--accent)] p-4 text-[13px] font-semibold text-[var(--accent-foreground)]"
+        >
+          {annonce}
+        </p>
+      )}
 
       <div
         role="tablist"

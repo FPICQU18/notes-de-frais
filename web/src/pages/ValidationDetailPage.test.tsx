@@ -10,7 +10,7 @@ import type {
   ValidationNoteDetail,
 } from "../api/client";
 import { ValidationDetailPage } from "./ValidationDetailPage";
-import { formatDateHeure } from "../lib/format";
+import { formatDateCourte, formatDateHeure } from "../lib/format";
 
 function jsonResponse(donnees: unknown, statut = 200): Response {
   return new Response(JSON.stringify(donnees), {
@@ -183,6 +183,11 @@ describe("lecture du dossier", () => {
       .map((element) => element.textContent);
     expect(libelles).toEqual(["Troisième", "Premier", "Deuxième"]);
     expect(within(section).getAllByText("1,00 €")).toHaveLength(3);
+    // Chaque dépense affiche sa date (formatDateCourte) et sa bulle de catégorie.
+    expect(within(section).getAllByText(formatDateCourte("2026-11-17"))).toHaveLength(3);
+    expect(
+      section.querySelectorAll("span[style*='--categorie-transport-fond']"),
+    ).toHaveLength(3);
   });
 
   test("justificatif image : vignette, agrandissement au clic, object URL révoquée au démontage", async () => {
