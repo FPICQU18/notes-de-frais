@@ -73,7 +73,22 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/depenses") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (/\/api\/v1\/validation\/notes\/\d+$/.test(url) && methode === "GET") {
+        return jsonResponse({
+          id: 123,
+          libelle: "Dossier 123",
+          statut: "soumise",
+          total_centimes: 0,
+          nb_depenses: 0,
+          soumise_at: "2026-11-18T12:00:00Z",
+          proprietaire: { id: 1, display_name: "Camille" },
+          depenses: [],
+        });
+      }
       if (url.includes("/api/v1/validation/notes") && methode === "GET") {
+        return jsonResponse([]);
+      }
+      if (/\/api\/v1\/notes\/\d+\/historique$/.test(url) && methode === "GET") {
         return jsonResponse([]);
       }
       if (url.endsWith("/api/v1/notes") && methode === "GET") {
@@ -386,12 +401,11 @@ test("admin : Validation affiché et Profil absent", async () => {
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
 });
 
-test("valideur sur /validation/123 : page « Dossier » en attente", async () => {
+test("valideur sur /validation/123 : affiche le détail du dossier", async () => {
   mockApi(VALIDEUR);
   renderApp("/validation/123");
 
-  expect(await screen.findByRole("heading", { name: "Dossier" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Dossier 123" })).toBeInTheDocument();
 });
 
 test("accueil connecté : le bouton « + » mène à la saisie d'une dépense", async () => {

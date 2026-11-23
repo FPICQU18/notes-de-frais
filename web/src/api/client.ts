@@ -39,6 +39,26 @@ export interface NoteValidation {
   };
 }
 
+/**
+ * Détail d'un dossier de la file de validation renvoyé par
+ * `GET /api/v1/validation/notes/{id}` : la note, ses dépenses (triées par le
+ * serveur) et son demandeur.
+ */
+export interface ValidationNoteDetail {
+  id: number;
+  libelle: string;
+  statut: StatutNote;
+  total_centimes: number;
+  nb_depenses: number;
+  /** Date d'envoi en validation (horodatage UTC), `null` pour les données antérieures. */
+  soumise_at: string | null;
+  proprietaire: {
+    id: number;
+    display_name: string;
+  };
+  depenses: Depense[];
+}
+
 export interface Depense {
   id: number;
   libelle: string;
