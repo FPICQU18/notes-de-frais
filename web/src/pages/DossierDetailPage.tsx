@@ -200,30 +200,46 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
   }
 
   return (
-    <main className="page">
+    <main className="page" aria-busy={note.chargement || undefined}>
       {note.chargement && detail === null && (
         <p className="chargement" role="status">
           Chargement…
         </p>
       )}
 
-      {!note.chargement && note.erreur !== null && detail === null && (
-        <section aria-label="Erreur" className="m-0 flex flex-col gap-3">
-          <p
-            role="alert"
-            className="m-0 rounded-[16px] bg-[var(--erreur-fond)] p-4 text-[13px] font-semibold text-[var(--erreur-texte)]"
-          >
-            {note.erreur}
-          </p>
-          <button
-            type="button"
-            onClick={note.reessayer}
-            className="h-[52px] rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-          >
-            Réessayer
-          </button>
-        </section>
-      )}
+      {!note.chargement && note.erreur !== null && detail === null &&
+        (note.erreurStatus === 404 ? (
+          <section aria-label="Dossier introuvable" className="m-0 flex flex-col gap-3">
+            <p
+              role="alert"
+              className="m-0 rounded-[16px] bg-[var(--erreur-fond)] p-4 text-[13px] font-semibold text-[var(--erreur-texte)]"
+            >
+              Ce dossier est introuvable.
+            </p>
+            <Link
+              to="/dossiers"
+              className="inline-flex h-[52px] items-center justify-center rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+            >
+              Retour aux dossiers
+            </Link>
+          </section>
+        ) : (
+          <section aria-label="Erreur" className="m-0 flex flex-col gap-3">
+            <p
+              role="alert"
+              className="m-0 rounded-[16px] bg-[var(--erreur-fond)] p-4 text-[13px] font-semibold text-[var(--erreur-texte)]"
+            >
+              {note.erreur}
+            </p>
+            <button
+              type="button"
+              onClick={note.reessayer}
+              className="h-[52px] rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+            >
+              Réessayer
+            </button>
+          </section>
+        ))}
 
       {detail !== null && (
         <>

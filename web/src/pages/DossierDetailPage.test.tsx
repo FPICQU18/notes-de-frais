@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
 import type { Depense, NoteDetail, StatutNote, TransitionRead } from "../api/client";
 import { DossierDetailPage } from "./DossierDetailPage";
+import { formatDateHeure } from "../lib/format";
 
 function jsonResponse(donnees: unknown, statut = 200): Response {
   return new Response(JSON.stringify(donnees), {
@@ -220,7 +221,8 @@ describe("lecture du dossier", () => {
     expect(appelsHistorique).toHaveLength(1);
   });
 
-  test("historique : date/heure, acteur, transition et motif", async () => {
+  test("historique : date/heure fr-FR, acteur, transition et motif", async () => {
+    const dateTransition = "2026-11-18T12:00:00Z";
     installerApi((url) => {
       if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "soumise" }));
       if (url === "/api/v1/notes/1/historique") {
@@ -230,7 +232,8 @@ describe("lecture du dossier", () => {
             acteur: { id: 1, display_name: "Camille" },
             ancien_statut: "brouillon",
             nouveau_statut: "soumise",
-            motif: null,
+            motif: "Frais professionnels conformes",
+            created_at: dateTransition,
           }),
         ]);
       }
@@ -242,13 +245,16 @@ describe("lecture du dossier", () => {
     const historique = (await screen.findByRole("heading", { name: "Historique" })).closest(
       "section",
     )!;
-    expect(await within(historique).findByText(/Camille/)).toBeInTheDocument();
+    const ligne = await within(historique).findByText(/Camille/);
+    expect(ligne).toHaveTextContent(formatDateHeure(dateTransition));
     expect(within(historique).getByText("Brouillon → Soumise")).toBeInTheDocument();
+    expect(within(historique).getByText("Frais professionnels conformes")).toBeInTheDocument();
   });
 
-  test("refusee : motif du refus dans un bloc role=status et bouton « Rouvrir le dossier »", async () => {
-    const fetchMock = installerApi((url) => {
-      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "refusee" }));
+  test("refusee : motif du refus dans un bloc role=status et « Rouvrir » ramène en édition", async () => {
+    let statutCourant: StatutNote = "refusee";
+    const fetchMock = installerApi((url, init) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: statutCourant }));
       if (url === "/api/v1/notes/1/historique") {
         return jsonResponse([
           transition({ id: 1, ancien_statut: "brouillon", nouveau_statut: "soumise", motif: null }),
@@ -261,24 +267,31 @@ describe("lecture du dossier", () => {
           }),
         ]);
       }
-      if (url === "/api/v1/notes/1/rouvrir") return new Response(null, { status: 204 });
+      if (url === "/api/v1/notes/1/rouvrir" && init?.method === "POST") {
+        statutCourant = "brouillon";
+        return new Response(null, { status: 204 });
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     });
 
     const utilisateur = userEvent.setup();
     renderPage();
 
-    const statut = (await screen.findByText("Motif du refus")).closest(
+    const blocMotif = (await screen.findByText("Motif du refus")).closest(
       '[role="status"]',
     ) as HTMLElement;
-    expect(within(statut).getByText("Justificatif manquant")).toBeInTheDocument();
+    expect(within(blocMotif).getByText("Justificatif manquant")).toBeInTheDocument();
 
     await utilisateur.click(screen.getByRole("button", { name: "Rouvrir le dossier" }));
-    await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.some(([entree]) => String(entree) === "/api/v1/notes/1/rouvrir"),
-      ).toBe(true),
-    );
+
+    // Retour en édition : pastille « Brouillon » et actions d'édition présentes.
+    await screen.findByText("Brouillon");
+    expect(screen.getByRole("button", { name: "Ajouter des dépenses" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Envoyer pour validation" })).toBeInTheDocument();
+
+    expect(
+      fetchMock.mock.calls.some(([entree]) => String(entree) === "/api/v1/notes/1/rouvrir"),
+    ).toBe(true);
   });
 });
 
@@ -597,12 +610,19 @@ describe("édition en brouillon", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
-  test("envoi : confirmation puis POST /soumettre et annonce", async () => {
+  test("envoi : confirmation, POST /soumettre, pastille « Soumise » et lecture seule", async () => {
+    let statutCourant: StatutNote = "brouillon";
     const fetchMock = installerApi((url, init) => {
       if (url === "/api/v1/notes/1/soumettre" && init?.method === "POST") {
+        statutCourant = "soumise";
         return new Response(null, { status: 204 });
       }
-      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1 }));
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: statutCourant }));
+      if (url === "/api/v1/notes/1/historique") {
+        return jsonResponse([
+          transition({ id: 1, ancien_statut: "brouillon", nouveau_statut: "soumise" }),
+        ]);
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     });
 
@@ -621,6 +641,12 @@ describe("édition en brouillon", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Dossier envoyé pour validation.",
     );
+    // Pastille « Soumise » et lecture seule après rechargement.
+    await screen.findByText("Soumise");
+    expect(
+      screen.queryByRole("button", { name: "Envoyer pour validation" }),
+    ).not.toBeInTheDocument();
+
     const appelsSoumettre = fetchMock.mock.calls.filter(([entree]) =>
       String(entree).includes("/soumettre"),
     );
@@ -653,13 +679,36 @@ describe("édition en brouillon", () => {
 });
 
 describe("erreurs de chargement", () => {
-  test("404 : message d'erreur et bouton « Réessayer »", async () => {
-    installerApi(() => jsonResponse({ detail: "Dossier introuvable." }, 404));
+  test("chargement : aria-busy=true pendant, absent une fois chargé", async () => {
+    let resoudreNote!: (reponse: Response) => void;
+    installerApi((url) => {
+      if (url === "/api/v1/notes/1") {
+        return new Promise<Response>((resoudre) => {
+          resoudreNote = resoudre;
+        });
+      }
+      return jsonResponse({ detail: "Introuvable" }, 404);
+    });
 
     renderPage();
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Dossier introuvable.");
-    expect(screen.getByRole("button", { name: "Réessayer" })).toBeInTheDocument();
+    expect(screen.getByText("Chargement…")).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+
+    resoudreNote(jsonResponse(note({ id: 1 })));
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    expect(screen.getByRole("main")).not.toHaveAttribute("aria-busy");
+  });
+
+  test("404 : « Ce dossier est introuvable. » et lien de retour, sans « Réessayer »", async () => {
+    installerApi(() => jsonResponse({ detail: "Note introuvable." }, 404));
+
+    renderPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Ce dossier est introuvable.");
+    const lien = screen.getByRole("link", { name: "Retour aux dossiers" });
+    expect(lien).toHaveAttribute("href", "/dossiers");
+    expect(screen.queryByRole("button", { name: "Réessayer" })).not.toBeInTheDocument();
   });
 
   test("erreur réseau : « Réessayer » relance l'appel", async () => {
