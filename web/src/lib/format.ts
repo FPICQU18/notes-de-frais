@@ -128,3 +128,20 @@ export function formatPeriode(dateIso: string | null): string {
 export function formatNbDepenses(nb: number): string {
   return nb >= 2 ? `${nb} dépenses` : `${nb} dépense`;
 }
+
+/** « 18 nov. 2026 à 15:30 » — date et heure fr-FR, converties au fuseau Europe/Paris. */
+export function formatDateHeure(dateIso: string): string {
+  const date = new Date(dateIso);
+  const jour = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+  const heure = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+  return `${jour} à ${heure}`;
+}

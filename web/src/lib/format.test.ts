@@ -4,6 +4,7 @@ import {
   dateDuJour,
   dateIsoParis,
   formatDateCourte,
+  formatDateHeure,
   formatMontant,
   initiales,
   moisCourant,
@@ -27,6 +28,12 @@ describe("formatDateCourte", () => {
 
   test("ne conserve pas de zéro initial sur le jour", () => {
     expect(formatDateCourte("2026-11-05")).toBe("5 nov.");
+  });
+});
+
+describe("formatDateHeure", () => {
+  test("date et heure fr-FR converties au fuseau Europe/Paris", () => {
+    expect(formatDateHeure("2026-11-18T14:30:00Z")).toBe("18 nov. 2026 à 15:30");
   });
 });
 

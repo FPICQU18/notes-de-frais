@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
 import { Folder, Plus } from "lucide-react";
 
 import type { Note } from "../api/client";
@@ -17,6 +18,9 @@ export function DossiersPage({ onSessionExpiree }: Props) {
   const refDialogueEtaitOuvert = useRef(false);
   const [dialogueOuvert, setDialogueOuvert] = useState(false);
   const dossiers = useApiGet<Note[]>("/v1/notes", onSessionExpiree);
+
+  const location = useLocation();
+  const annonce = (location.state as { annonce?: string } | null)?.annonce ?? null;
 
   useEffect(() => {
     refTitre.current?.focus();
@@ -64,6 +68,15 @@ export function DossiersPage({ onSessionExpiree }: Props) {
           </button>
         )}
       </header>
+
+      {annonce !== null && (
+        <p
+          role="status"
+          className="m-0 mb-4 rounded-[16px] bg-[var(--accent)] p-4 text-[13px] font-semibold text-[var(--accent-foreground)]"
+        >
+          {annonce}
+        </p>
+      )}
 
       <section aria-busy={dossiers.chargement || undefined} aria-label="Dossiers">
         {dossiers.chargement && <p className="chargement">Chargement…</p>}

@@ -6,6 +6,7 @@ import { MiseEnPage } from "./components/MiseEnPage";
 import { PageBientotDisponible } from "./components/PageBientotDisponible";
 import { DepensesPage } from "./pages/DepensesPage";
 import { DetailDepensePage } from "./pages/DetailDepensePage";
+import { DossierDetailPage } from "./pages/DossierDetailPage";
 import { DossiersPage } from "./pages/DossiersPage";
 import { EcranErreur } from "./pages/EcranErreur";
 import { HomePage } from "./pages/HomePage";
@@ -125,6 +126,10 @@ export function AppRoutes() {
         <Route
           path="/dossiers"
           element={<DossiersPage onSessionExpiree={gererDeconnexion} />}
+        />
+        <Route
+          path="/dossiers/:id"
+          element={<DossierDetailPage onSessionExpiree={gererDeconnexion} />}
         />
         <Route
           path="/validation"
