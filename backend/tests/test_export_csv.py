@@ -194,11 +194,14 @@ def test_bom_puis_entete_puis_crlf(client, db_session):
     texte = response.content.decode("utf-8")
     assert texte.startswith("\ufeff")
     lignes = texte.split("\r\n")
-    # BOM + en-tête + une ligne de dépense, et rien d'autre (pas de ligne vide finale).
+    # BOM + en-tête + une ligne de dépense, terminée par un unique CRLF final
+    # (pas de ligne vide superflue : pas de double CRLF en fin de corps).
     assert lignes == [
         "\ufeffDate;Catégorie;Libellé;Montant",
         "2024-01-15;Repas;Repas client;24,50",
+        "",
     ]
+    assert texte.endswith("\r\n") and not texte.endswith("\r\n\r\n")
     assert "\n" not in texte.replace("\r\n", "")
 
 
@@ -264,7 +267,8 @@ def test_libelle_avec_point_virgule_guillemet_saut_de_ligne(client, db_session):
     assert response.status_code == 200
     texte = response.content.decode("utf-8-sig")
     # Le champ est entouré de guillemets doubles et les guillemets doublés.
-    assert '"Facture ""TTC""; acompte\r\nligne 2"' in texte
+    # Le saut de ligne interne reste un LF brut à l'intérieur du champ cité.
+    assert '"Facture ""TTC""; acompte\nligne 2"' in texte
     # RelISIBLE par csv.reader : un seul champ libellé, valeur intacte.
     lignes = list(csv.reader(io.StringIO(texte), delimiter=";"))
     assert lignes[1] == ["2024-01-15", "Autre", libelle, "12,50"]
