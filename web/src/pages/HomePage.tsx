@@ -68,9 +68,13 @@ export function HomePage({
   return (
     <main className="ecran ecran--accueil" aria-busy={chargementGeneral || undefined}>
       <header className="accueil-entete">
-        <span className="accueil-avatar" aria-hidden="true">
+        <Link
+          to="/profil"
+          aria-label="Profil"
+          className="accueil-avatar focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+        >
           {initiales(utilisateur.display_name)}
-        </span>
+        </Link>
         <div className="accueil-entete__identite">
           <p className="accueil-entete__date">{dateDuJour(aujourdhui)}</p>
           <h1 className="accueil-entete__titre" tabIndex={-1} ref={refTitre}>
