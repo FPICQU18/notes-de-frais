@@ -12,12 +12,14 @@ from datetime import UTC, date, datetime
 from typing import Annotated
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as OrmSession
 
+from app.api.note_transitions import _note_visible
 from app.auth.dependencies import get_current_user
 from app.db import get_db
+from app.export_csv import depenses_to_csv
 from app.models import Depense, Note, User
 from app.schemas.depense import DepenseRead
 from app.schemas.note import (
@@ -134,6 +136,34 @@ def list_notes(db: DbSession, current_user: CurrentUser) -> list[NoteRead]:
         _note_read(note, total_centimes, nb_depenses, derniere_depense_le)
         for note, total_centimes, nb_depenses, derniere_depense_le in db.execute(stmt).all()
     ]
+
+
+@router.get("/{note_id}/export.csv")
+def export_note_csv(note_id: int, db: DbSession, current_user: CurrentUser) -> Response:
+    """Exporte un dossier visible en CSV (BOM UTF-8, séparateur `;`, CRLF).
+
+    Même visibilité que le reste du domaine : propriétaire pour tout statut,
+    valideur/admin pour les dossiers non `brouillon` d'autrui, sinon 404
+    « Note introuvable. » (jamais 403). Le nom de fichier est dérivé de
+    l'identifiant, jamais d'une donnée utilisateur.
+    """
+    note = _note_visible(db.get(Note, note_id), current_user)
+    depenses = list(
+        db.execute(
+            select(Depense)
+            .where(Depense.note_id == note.id)
+            .order_by(Depense.date_depense.asc(), Depense.id.asc())
+        ).scalars()
+    )
+    return Response(
+        content=depenses_to_csv(depenses).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="note-{note.id}.csv"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.get("/{note_id}", response_model=NoteDetail)
