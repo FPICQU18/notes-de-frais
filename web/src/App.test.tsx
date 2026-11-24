@@ -100,6 +100,18 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/notes") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (url.split("?")[0].endsWith("/api/v1/users") && methode === "GET") {
+        return jsonResponse([
+          {
+            id: session?.id ?? 1,
+            email: session?.email ?? "camille@example.com",
+            display_name: session?.display_name ?? "Camille",
+            role: session?.role ?? "utilisateur",
+            is_active: true,
+            created_at: "2026-11-01T10:00:00Z",
+          },
+        ]);
+      }
       return jsonResponse({ detail: "Introuvable" }, 404);
     },
   );
@@ -537,12 +549,14 @@ test("utilisateur sur /profil : la page Profil affiche nom, e-mail, pastille et 
   expect(screen.queryByRole("link", { name: "Gérer les comptes" })).not.toBeInTheDocument();
 });
 
-test("admin sur /admin/comptes : page « Bientôt disponible » ; valideur et utilisateur redirigés vers /", async () => {
+test("admin sur /admin/comptes : la page Comptes s'affiche avec sa liste ; valideur et utilisateur redirigés vers /", async () => {
   mockApi(ADMIN);
   renderApp("/admin/comptes");
 
   expect(await screen.findByRole("heading", { name: "Comptes" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  // La liste de l'API s'affiche (ici : le compte de l'admin lui-même).
+  expect(await screen.findByText("admin@example.com")).toBeInTheDocument();
+  expect(screen.queryByText("Bientôt disponible.")).not.toBeInTheDocument();
 });
 
 test.each([
