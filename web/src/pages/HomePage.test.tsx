@@ -349,7 +349,39 @@ test("entête : initiales, date en français et « Bonjour <display_name> »", a
     await screen.findByRole("heading", { name: "Bonjour Camille Martin" }),
   ).toBeInTheDocument();
   expect(screen.getByText("Dimanche 15 novembre")).toBeInTheDocument();
-  expect(screen.getByText("CM")).toHaveAttribute("aria-hidden", "true");
+  // L'avatar est un lien vers /profil (plus aria-hidden).
+  const avatar = screen.getByRole("link", { name: "Profil" });
+  expect(avatar).toHaveAttribute("href", "/profil");
+  expect(avatar).toHaveTextContent("CM");
+  expect(avatar).not.toHaveAttribute("aria-hidden");
+});
+
+test("avatar de l'entête : clic sur « Profil » mène à /profil", async () => {
+  mockAccueil();
+  const utilisateur = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/"]}>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <HomePage
+              utilisateur={UTILISATEUR}
+              onDeconnecte={() => {}}
+              onSessionExpiree={() => {}}
+              focusTitre={false}
+              maintenant={MAINTENANT}
+            />
+          }
+        />
+        <Route path="/profil" element={<div>Page profil</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await utilisateur.click(await screen.findByRole("link", { name: "Profil" }));
+
+  expect(await screen.findByText("Page profil")).toBeInTheDocument();
 });
 
 test("focusTitre : le h1 reçoit le focus", async () => {

@@ -480,22 +480,31 @@ test("utilisateur : les 5 emplacements de la barre sont dans le bon ordre", asyn
   ]);
 });
 
-test("valideur sur /profil : redirigé vers l'accueil, sans lien Profil", async () => {
+test("valideur sur /profil : la page Profil s'affiche (pas de redirection)", async () => {
   mockApi(VALIDEUR);
   renderApp("/profil");
 
-  expect(await screen.findByRole("heading", { name: "Bonjour Valideur" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Profil" })).toBeInTheDocument();
+  expect(screen.getByText("valideur@example.com")).toBeInTheDocument();
+  // Pastille de rôle « Valideur » (et non le nom affiché, identique ici).
+  expect(screen.getByText("Valideur", { selector: "span" })).toBeInTheDocument();
 
   const nav = screen.getByRole("navigation", { name: "Navigation principale" });
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
   expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
 });
 
-test("admin sur /profil : redirigé vers l'accueil, sans lien Profil", async () => {
+test("admin sur /profil : la page Profil s'affiche avec le lien « Gérer les comptes »", async () => {
   mockApi(ADMIN);
   renderApp("/profil");
 
-  expect(await screen.findByRole("heading", { name: "Bonjour Admin" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Profil" })).toBeInTheDocument();
+  expect(screen.getByText("admin@example.com")).toBeInTheDocument();
+  expect(screen.getByText("Admin", { selector: "span" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Gérer les comptes" })).toHaveAttribute(
+    "href",
+    "/admin/comptes",
+  );
 
   const nav = screen.getByRole("navigation", { name: "Navigation principale" });
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
@@ -514,12 +523,72 @@ test("utilisateur sur /depenses : titre « Dépenses », liste vide, onglet acti
   );
 });
 
-test("utilisateur sur /profil : titre « Profil » et « Bientôt disponible. »", async () => {
+test("utilisateur sur /profil : la page Profil affiche nom, e-mail, pastille et « Se déconnecter »", async () => {
   mockApi(UTILISATEUR);
   renderApp("/profil");
 
-  expect(await screen.findByRole("heading", { name: "Profil" })).toBeInTheDocument();
+  const titre = await screen.findByRole("heading", { name: "Profil" });
+  expect(titre).toBeInTheDocument();
+  expect(titre).toHaveFocus();
+  expect(screen.getByText("Camille")).toBeInTheDocument();
+  expect(screen.getByText("camille@example.com")).toBeInTheDocument();
+  expect(screen.getByText("Utilisateur")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Se déconnecter" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Gérer les comptes" })).not.toBeInTheDocument();
+});
+
+test("admin sur /admin/comptes : page « Bientôt disponible » ; valideur et utilisateur redirigés vers /", async () => {
+  mockApi(ADMIN);
+  renderApp("/admin/comptes");
+
+  expect(await screen.findByRole("heading", { name: "Comptes" })).toBeInTheDocument();
   expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+});
+
+test.each([
+  [UTILISATEUR],
+  [VALIDEUR],
+])("rôle non admin sur /admin/comptes : redirigé vers l'accueil", async (utilisateur) => {
+  mockApi(utilisateur);
+  renderApp("/admin/comptes");
+
+  expect(
+    await screen.findByRole("heading", { name: `Bonjour ${utilisateur.display_name}` }),
+  ).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Comptes" })).not.toBeInTheDocument();
+});
+
+test("avatar de l'accueil : lien « Profil » vers /profil, puis page Profil au clic", async () => {
+  mockApi(UTILISATEUR);
+  const utilisateur = userEvent.setup();
+  renderApp();
+
+  await screen.findByRole("heading", { name: "Bonjour Camille" });
+  const avatar = screen
+    .getAllByRole("link", { name: "Profil" })
+    .find((lien) => lien.classList.contains("accueil-avatar"));
+  expect(avatar).toBeDefined();
+  expect(avatar).toHaveAttribute("href", "/profil");
+  expect(avatar).not.toHaveAttribute("aria-hidden");
+
+  await utilisateur.click(avatar!);
+
+  expect(await screen.findByRole("heading", { name: "Profil" })).toBeInTheDocument();
+});
+
+test("déconnexion depuis la page Profil : logout appelé une fois puis retour à la connexion", async () => {
+  const fetchMock = mockApi(UTILISATEUR);
+  const utilisateur = userEvent.setup();
+  renderApp("/profil");
+
+  await utilisateur.click(await screen.findByRole("button", { name: "Se déconnecter" }));
+
+  expect(await screen.findByLabelText("Adresse e-mail")).toBeInTheDocument();
+  const appelsLogout = fetchMock.mock.calls.filter(([entree]) =>
+    String(entree).includes("/api/v1/auth/logout"),
+  );
+  expect(appelsLogout).toHaveLength(1);
+  aucunAppelHealth(fetchMock.mock.calls);
 });
 
 test("focus du h1 à l'arrivée sur une page vide après clic sur Dossiers", async () => {

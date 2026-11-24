@@ -12,6 +12,7 @@ import { EcranErreur } from "./pages/EcranErreur";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { NouvelleDepensePage } from "./pages/NouvelleDepensePage";
+import { ProfilPage } from "./pages/ProfilPage";
 import { ValidationDetailPage } from "./pages/ValidationDetailPage";
 import { ValidationPage } from "./pages/ValidationPage";
 
@@ -158,11 +159,15 @@ export function AppRoutes() {
         />
         <Route
           path="/profil"
+          element={<ProfilPage utilisateur={utilisateur} onDeconnecte={gererDeconnexion} />}
+        />
+        <Route
+          path="/admin/comptes"
           element={
-            estValideur ? (
-              <Navigate to="/" replace />
+            utilisateur.role === "admin" ? (
+              <PageBientotDisponible titre="Comptes" />
             ) : (
-              <PageBientotDisponible titre="Profil" />
+              <Navigate to="/" replace />
             )
           }
         />
