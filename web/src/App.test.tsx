@@ -73,8 +73,29 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/depenses") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (/\/api\/v1\/validation\/notes\/\d+$/.test(url) && methode === "GET") {
+        return jsonResponse({
+          id: 123,
+          libelle: "Dossier 123",
+          statut: "soumise",
+          total_centimes: 0,
+          nb_depenses: 0,
+          soumise_at: "2026-11-18T12:00:00Z",
+          proprietaire: { id: 1, display_name: "Camille" },
+          depenses: [],
+        });
+      }
       if (url.includes("/api/v1/validation/notes") && methode === "GET") {
         return jsonResponse([]);
+      }
+      if (/\/api\/v1\/notes\/\d+\/historique$/.test(url) && methode === "GET") {
+        return jsonResponse([]);
+      }
+      if (/\/api\/v1\/notes\/\d+\/valider$/.test(url) && methode === "POST") {
+        return new Response(null, { status: 204 });
+      }
+      if (/\/api\/v1\/notes\/\d+\/refuser$/.test(url) && methode === "POST") {
+        return new Response(null, { status: 204 });
       }
       if (url.endsWith("/api/v1/notes") && methode === "GET") {
         return jsonResponse([]);
@@ -386,12 +407,35 @@ test("admin : Validation affiché et Profil absent", async () => {
   expect(within(nav).queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
 });
 
-test("valideur sur /validation/123 : page « Dossier » en attente", async () => {
+test("valideur sur /validation/123 : affiche le détail du dossier", async () => {
   mockApi(VALIDEUR);
   renderApp("/validation/123");
 
-  expect(await screen.findByRole("heading", { name: "Dossier" })).toBeInTheDocument();
-  expect(screen.getByText("Bientôt disponible.")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Dossier 123" })).toBeInTheDocument();
+});
+
+test("valider un dossier : POST /valider puis annonce « Dossier validé. » dans un role=status", async () => {
+  mockApi(VALIDEUR);
+  const utilisateur = userEvent.setup();
+  renderApp("/validation/123");
+
+  await utilisateur.click(await screen.findByRole("button", { name: "Valider" }));
+  await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
+
+  expect(await screen.findByRole("status")).toHaveTextContent("Dossier validé.");
+});
+
+test("refuser un dossier : POST /refuser puis annonce « Dossier refusé. » dans un role=status", async () => {
+  mockApi(VALIDEUR);
+  const utilisateur = userEvent.setup();
+  renderApp("/validation/123");
+
+  await utilisateur.click(await screen.findByRole("button", { name: "Refuser" }));
+  const dialogue = screen.getByRole("dialog");
+  await utilisateur.type(within(dialogue).getByLabelText("Motif du refus"), "Justificatif manquant");
+  await utilisateur.click(within(dialogue).getByRole("button", { name: "Confirmer le refus" }));
+
+  expect(await screen.findByRole("status")).toHaveTextContent("Dossier refusé.");
 });
 
 test("accueil connecté : le bouton « + » mène à la saisie d'une dépense", async () => {

@@ -12,6 +12,7 @@ import { EcranErreur } from "./pages/EcranErreur";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { NouvelleDepensePage } from "./pages/NouvelleDepensePage";
+import { ValidationDetailPage } from "./pages/ValidationDetailPage";
 import { ValidationPage } from "./pages/ValidationPage";
 
 type Etat = "chargement" | "anonyme" | "connecte" | "erreur";
@@ -149,7 +150,7 @@ export function AppRoutes() {
           path="/validation/:id"
           element={
             estValideur ? (
-              <PageBientotDisponible titre="Dossier" />
+              <ValidationDetailPage onSessionExpiree={gererDeconnexion} />
             ) : (
               <Navigate to="/" replace />
             )
