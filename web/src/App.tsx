@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 
 import { ApiError, apiGet, type UserRead } from "./api/client";
 import { MiseEnPage } from "./components/MiseEnPage";
-import { PageBientotDisponible } from "./components/PageBientotDisponible";
+import { ComptesPage } from "./pages/ComptesPage";
 import { DepensesPage } from "./pages/DepensesPage";
 import { DetailDepensePage } from "./pages/DetailDepensePage";
 import { DossierDetailPage } from "./pages/DossierDetailPage";
@@ -165,7 +165,10 @@ export function AppRoutes() {
           path="/admin/comptes"
           element={
             utilisateur.role === "admin" ? (
-              <PageBientotDisponible titre="Comptes" />
+              <ComptesPage
+                utilisateur={utilisateur}
+                onSessionExpiree={gererDeconnexion}
+              />
             ) : (
               <Navigate to="/" replace />
             )
