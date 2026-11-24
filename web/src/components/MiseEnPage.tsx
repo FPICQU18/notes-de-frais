@@ -44,7 +44,7 @@ export function MiseEnPage({ utilisateur }: Props) {
       <div className="mise-en-page__contenu">
         <Outlet />
       </div>
-      <nav className="barre-navigation" aria-label="Navigation principale">
+      <nav className="barre-navigation print:hidden" aria-label="Navigation principale">
         <LienNavigation
           vers="/"
           fin

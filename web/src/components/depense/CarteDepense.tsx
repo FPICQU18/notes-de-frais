@@ -79,7 +79,7 @@ function ContenuCarte({ depense }: { depense: Depense }) {
 export function CarteDepense({ depense, vers, action }: Props) {
   if (vers === undefined) {
     return (
-      <li className="carte-depense">
+      <li className="carte-depense print:break-inside-avoid print:bg-white print:text-black">
         <ContenuCarte depense={depense} />
       </li>
     );
@@ -94,11 +94,11 @@ export function CarteDepense({ depense, vers, action }: Props) {
 
   if (action === undefined) {
     return (
-      <li className="m-0 list-none p-0">
+      <li className="m-0 list-none p-0 print:break-inside-avoid">
         <Link
           to={vers}
           onKeyDown={gererTouche}
-          className="carte-depense no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+          className="carte-depense no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] print:bg-white print:text-black print:shadow-none"
         >
           <ContenuCarte depense={depense} />
         </Link>
@@ -107,11 +107,11 @@ export function CarteDepense({ depense, vers, action }: Props) {
   }
 
   return (
-    <li className="m-0 flex list-none items-center gap-2 p-0">
+    <li className="m-0 flex list-none items-center gap-2 p-0 print:break-inside-avoid">
       <Link
         to={vers}
         onKeyDown={gererTouche}
-        className="carte-depense min-w-0 flex-1 no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+        className="carte-depense min-w-0 flex-1 no-underline text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] print:bg-white print:text-black print:shadow-none"
       >
         <ContenuCarte depense={depense} />
       </Link>
@@ -119,7 +119,7 @@ export function CarteDepense({ depense, vers, action }: Props) {
         type="button"
         onClick={action.surClic}
         aria-label={action.ariaLabel}
-        className="h-11 shrink-0 rounded-[18px] bg-[var(--secondary)] px-4 text-[15px] font-bold text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+        className="h-11 shrink-0 rounded-[18px] bg-[var(--secondary)] px-4 text-[15px] font-bold text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] print:hidden"
       >
         {action.libelle}
       </button>
