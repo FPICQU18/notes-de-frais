@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { Check, Folder, Home, Plus, Receipt, User } from "lucide-react";
 
@@ -11,10 +11,11 @@ type Props = {
 
 /**
  * Nombre de dossiers à traiter (`statut=soumise`) affiché en pastille sur
- * l'onglet Validation. Le compteur exclut les dossiers dont l'utilisateur
- * est propriétaire (ils ne peuvent pas être validés par lui-même) et la
- * pastille disparaît à zéro. Le compteur est rechargé à chaque navigation
- * (retour sur la liste après une décision, rechargement de l'appli).
+ * l'onglet Validation. Comme la page Validation, on exclut les dossiers dont
+ * l'utilisateur est propriétaire (il ne peut pas se valider lui-même) et la
+ * pastille disparaît à zéro. Le compteur est rechargé à chaque navigation :
+ * retour sur la liste après une décision, rechargement de l'appli.
+ * `null` = aucune pastille (rôle `utilisateur` ou chargement en cours).
  */
 function useCompteurATraiter(
   utilisateur: UserRead | null,
@@ -25,39 +26,39 @@ function useCompteurATraiter(
   const location = useLocation();
   const [compteur, setCompteur] = useState<number | null>(null);
 
-  const charger = useCallback(() => {
-    if (!estValideur || utilisateur === null) {
-      setCompteur(null);
-      return;
-    }
+  useEffect(() => {
+    if (!estValideur || utilisateur === null) return;
+    let actif = true;
     apiGet<NoteValidation[]>("/v1/validation/notes?statut=soumise")
       .then((notes) => {
+        if (!actif) return;
         setCompteur(
           notes.filter((note) => note.proprietaire.id !== utilisateur.id).length,
         );
       })
       .catch((attrape: unknown) => {
+        if (!actif) return;
         if (attrape instanceof ApiError && attrape.status === 401) {
           onSessionExpiree();
           return;
         }
-        // En cas d'erreur, on ne touche pas au compteur courant : pas de
-        // pastille fantôme, pas de régression affichée.
+        // Autre erreur : on garde le compteur courant (pas de pastille fantôme).
       });
-  }, [estValideur, utilisateur, onSessionExpiree]);
+    return () => {
+      actif = false;
+    };
+  }, [estValideur, utilisateur, onSessionExpiree, location.key]);
 
-  useEffect(() => {
-    charger();
-  }, [charger, location.key]);
-
+  if (!estValideur) return null;
   return compteur;
 }
 
+/** Pastille de compteur, purement visuelle : lue via l'aria-label du lien. */
 function PastilleCompteur({ compteur }: { compteur: number }) {
   return (
     <span
       aria-hidden="true"
-      className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[11px] font-extrabold leading-none text-[var(--accent-foreground)]"
+      className="absolute -top-1.5 -right-2 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-[var(--primary)] px-1 text-[11px] font-extrabold leading-none text-[var(--primary-foreground)]"
     >
       {compteur}
     </span>
