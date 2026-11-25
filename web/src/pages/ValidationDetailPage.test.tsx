@@ -7,8 +7,10 @@ import type {
   Depense,
   StatutNote,
   TransitionRead,
+  UserRead,
   ValidationNoteDetail,
 } from "../api/client";
+import { MiseEnPage } from "../components/MiseEnPage";
 import { ValidationDetailPage } from "./ValidationDetailPage";
 import { formatDateCourte, formatDateHeure } from "../lib/format";
 
@@ -67,15 +69,50 @@ function StubValidation() {
   return <div>LISTE VALIDATION{annonce ? ` — ${annonce}` : ""}</div>;
 }
 
-function renderPage(url = "/validation/1") {
+function renderPage(url = "/validation/1", role: UserRead["role"] = "valideur") {
   const onSessionExpiree = vi.fn();
+  const utilisateur: UserRead = {
+    id: 3,
+    email: "valideur@exemple.fr",
+    display_name: "Valideur",
+    role,
+  };
   const utils = render(
     <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route
           path="/validation/:id"
-          element={<ValidationDetailPage onSessionExpiree={onSessionExpiree} />}
+          element={
+            <ValidationDetailPage utilisateur={utilisateur} onSessionExpiree={onSessionExpiree} />
+          }
         />
+        <Route path="/validation" element={<StubValidation />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  return { onSessionExpiree, ...utils };
+}
+
+/** Rendu avec la barre de navigation (MiseEnPage), pour tester les variantes print. */
+function renderPageAvecMiseEnPage(role: UserRead["role"] = "admin") {
+  const onSessionExpiree = vi.fn();
+  const utilisateur: UserRead = {
+    id: 3,
+    email: "admin@exemple.fr",
+    display_name: "Admin",
+    role,
+  };
+  const utils = render(
+    <MemoryRouter initialEntries={["/validation/1"]}>
+      <Routes>
+        <Route element={<MiseEnPage utilisateur={utilisateur} />}>
+          <Route
+            path="/validation/:id"
+            element={
+              <ValidationDetailPage utilisateur={utilisateur} onSessionExpiree={onSessionExpiree} />
+            }
+          />
+        </Route>
         <Route path="/validation" element={<StubValidation />} />
       </Routes>
     </MemoryRouter>,
@@ -676,6 +713,406 @@ describe("erreurs de chargement", () => {
     installerApi(() => jsonResponse({ detail: "Session expirée." }, 401));
 
     const { onSessionExpiree } = renderPage();
+
+    await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  });
+});
+
+describe("actions CSV et impression sur le détail de validation (US-030)", () => {
+  function installerApiStatut(statut: StatutNote) {
+    return installerApi(
+      apiAvecJustificatifsParDefaut((url) => {
+        if (url === "/api/v1/validation/notes/1") {
+          return jsonResponse(note({ id: 1, statut }));
+        }
+        if (url === "/api/v1/notes/1/historique") {
+          return jsonResponse([
+            transition({ id: 1, ancien_statut: "brouillon", nouveau_statut: statut }),
+          ]);
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+  }
+
+  test.each(["validee", "remboursee"] as const)(
+    "statut %s : « Télécharger le CSV » et « Imprimer » sont disponibles",
+    async (statut) => {
+      installerApiStatut(statut);
+
+      renderPage("/validation/1", "valideur");
+
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+      expect(screen.getByRole("button", { name: "Télécharger le CSV" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Imprimer" })).toBeInTheDocument();
+    },
+  );
+
+  test.each(["soumise", "refusee"] as const)(
+    "statut %s : aucune des deux actions n'est affichée",
+    async (statut) => {
+      installerApiStatut(statut);
+
+      renderPage("/validation/1", "valideur");
+
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+      expect(
+        screen.queryByRole("button", { name: "Télécharger le CSV" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Imprimer" })).not.toBeInTheDocument();
+    },
+  );
+
+  test("« Télécharger le CSV » appelle le même helper (même URL, même nom de fichier) que le détail du dossier", async () => {
+    const fetchMock = installerApi(
+      apiAvecJustificatifsParDefaut((url) => {
+        if (url === "/api/v1/validation/notes/1") {
+          return jsonResponse(note({ id: 1, statut: "validee" }));
+        }
+        if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+        if (url === "/api/v1/notes/1/export.csv") {
+          return new Response("date;libellé\n", {
+            status: 200,
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": 'attachment; filename="note-1.csv"',
+            },
+          });
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "valideur");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    await utilisateur.click(screen.getByRole("button", { name: "Télécharger le CSV" }));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1));
+    const appelExport = fetchMock.mock.calls.filter(
+      ([entree, init]) =>
+        String(entree) === "/api/v1/notes/1/export.csv" && (init?.method ?? "GET") === "GET",
+    );
+    expect(appelExport).toHaveLength(1);
+    expect(appelExport[0][1]?.credentials).toBe("same-origin");
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:apercu-ticket");
+    // Aucune navigation : la page reste sur le détail de validation.
+    expect(screen.getByRole("heading", { level: 1, name: "Semaine 47" })).toBeInTheDocument();
+  });
+
+  test("échec 404 de l'export : alerte role=alert avec le message de l'API", async () => {
+    installerApi(
+      apiAvecJustificatifsParDefaut((url) => {
+        if (url === "/api/v1/validation/notes/1") {
+          return jsonResponse(note({ id: 1, statut: "remboursee" }));
+        }
+        if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+        if (url === "/api/v1/notes/1/export.csv") {
+          return jsonResponse({ detail: "Note introuvable." }, 404);
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "valideur");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    await utilisateur.click(screen.getByRole("button", { name: "Télécharger le CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Note introuvable.");
+    expect(screen.getByRole("heading", { level: 1, name: "Semaine 47" })).toBeInTheDocument();
+  });
+
+  test("« Imprimer » appelle window.print() une fois, sans aucune requête réseau", async () => {
+    const fetchMock = installerApiStatut("validee");
+    const printMock = vi.fn();
+    vi.stubGlobal("print", printMock);
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "valideur");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    const nbAppelsAvant = fetchMock.mock.calls.length;
+    await utilisateur.click(screen.getByRole("button", { name: "Imprimer" }));
+
+    expect(printMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.length).toBe(nbAppelsAvant);
+  });
+
+  test("impression : barre de navigation, actions, lien de retour et vignettes masqués ; en-tête, dépenses et historique conservent leurs contenus", async () => {
+    installerApiStatut("validee");
+
+    renderPageAvecMiseEnPage("admin");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+
+    // Barre de navigation masquée (classe posée par MiseEnPage, US-029).
+    const nav = screen.getByRole("navigation", { name: "Navigation principale" });
+    expect(nav.className).toContain("print:hidden");
+
+    // Actions CSV/impression masquées (composant ActionsDossierFinalise, US-029).
+    const boutonCsv = screen.getByRole("button", { name: "Télécharger le CSV" });
+    const boutonImprimer = screen.getByRole("button", { name: "Imprimer" });
+    expect(boutonCsv.closest("div")!.className).toContain("print:hidden");
+    expect(boutonImprimer.closest("div")!.className).toContain("print:hidden");
+
+    // Bouton de remboursement et barre d'actions « Valider/Refuser » masqués.
+    const boutonRembourser = screen.getByRole("button", { name: "Marquer comme remboursé" });
+    expect(boutonRembourser.closest("div")!.className).toContain("print:hidden");
+
+    // Lien de retour masqué, mais la pastille de statut reste imprimable.
+    const lienRetour = screen.getByRole("link", { name: "Retour à la validation" });
+    expect(lienRetour.className).toContain("print:hidden");
+    expect(screen.getByText("Validée").className).toContain("print:text-black");
+
+    // Vignettes de justificatifs masquées (wrapper print:hidden autour de la vignette) :
+    // attendre que le chargement des photos soit terminé avant de contrôler le wrapper.
+    await screen.findAllByText("Aucune photo");
+    const vignette = screen.getAllByText("Aucune photo")[0];
+    let parentVignette: HTMLElement | null = vignette.parentElement;
+    while (parentVignette !== null && !parentVignette.className.includes("print:hidden")) {
+      parentVignette = parentVignette.parentElement;
+    }
+    expect(parentVignette).not.toBeNull();
+
+    // En-tête, dépenses et historique conservent leurs contenus lisibles.
+    expect(screen.getByText("Camille")).toBeInTheDocument();
+    expect(screen.getByText("180,00 €")).toBeInTheDocument();
+    expect(screen.getByText("Train")).toBeInTheDocument();
+    expect(screen.getByText("Déjeuner")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Historique" })).toBeInTheDocument();
+    expect(screen.getByText("Brouillon → Validée")).toBeInTheDocument();
+  });
+});
+
+describe("remboursement (US-030)", () => {
+  function installerApiRemboursement(
+    reponseRembourser: (url: string, init?: RequestInit) => Response | Promise<Response>,
+    statutInitial: StatutNote = "validee",
+  ) {
+    return installerApi(
+      apiAvecJustificatifsParDefaut((url, init) => {
+        if (url === "/api/v1/validation/notes/1") {
+          return jsonResponse(note({ id: 1, statut: statutInitial }));
+        }
+        if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+        if (url === "/api/v1/notes/1/rembourser" && init?.method === "POST") {
+          return reponseRembourser(url, init);
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+  }
+
+  test("admin + statut validée : le bouton « Marquer comme remboursé » est visible", async () => {
+    installerApiRemboursement(() => new Response(null, { status: 204 }));
+
+    renderPage("/validation/1", "admin");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    expect(
+      screen.getByRole("button", { name: "Marquer comme remboursé" }),
+    ).toBeInTheDocument();
+  });
+
+  test("valideur non admin + statut validée : le bouton est absent", async () => {
+    installerApiRemboursement(() => new Response(null, { status: 204 }));
+
+    renderPage("/validation/1", "valideur");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    expect(
+      screen.queryByRole("button", { name: "Marquer comme remboursé" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test.each(["soumise", "refusee", "remboursee"] as const)(
+    "admin + statut %s : le bouton est absent",
+    async (statut) => {
+      installerApiRemboursement(() => new Response(null, { status: 204 }), statut);
+
+      renderPage("/validation/1", "admin");
+
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+      expect(
+        screen.queryByRole("button", { name: "Marquer comme remboursé" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  test("confirmation « Marquer ce dossier comme remboursé ? » avec Annuler / Confirmer ; confirmer envoie un seul POST (double clic = un appel)", async () => {
+    let resolvePost!: (reponse: Response) => void;
+    const fetchMock = installerApiRemboursement(
+      () =>
+        new Promise<Response>((resoudre) => {
+          resolvePost = resoudre;
+        }),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "admin");
+
+    await utilisateur.click(
+      await screen.findByRole("button", { name: "Marquer comme remboursé" }),
+    );
+    const dialogue = screen.getByRole("dialog");
+    expect(
+      within(dialogue).getByRole("heading", { name: "Marquer ce dossier comme remboursé ?" }),
+    ).toBeInTheDocument();
+    expect(within(dialogue).getByRole("button", { name: "Annuler" })).toBeInTheDocument();
+
+    const confirmer = within(dialogue).getByRole("button", { name: "Confirmer" });
+    await utilisateur.click(confirmer);
+
+    // Pendant l'appel : bouton désactivé + aria-busy ; un second clic ne produit qu'un appel.
+    const boutonEnCours = screen.getByRole("button", { name: "En cours…" });
+    expect(boutonEnCours).toBeDisabled();
+    expect(boutonEnCours).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(boutonEnCours);
+
+    resolvePost(new Response(null, { status: 204 }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const appelsPost = fetchMock.mock.calls.filter(
+      ([entree, init]) =>
+        String(entree) === "/api/v1/notes/1/rembourser" && init?.method === "POST",
+    );
+    expect(appelsPost).toHaveLength(1);
+  });
+
+  test("succès : statut « Remboursée », annonce « Dossier remboursé. » en zone aria-live, bouton disparu, actions CSV/impression toujours là", async () => {
+    let appelsNote = 0;
+    installerApi(
+      apiAvecJustificatifsParDefaut((url, init) => {
+        if (url === "/api/v1/validation/notes/1") {
+          appelsNote += 1;
+          const statut: StatutNote = appelsNote === 1 ? "validee" : "remboursee";
+          return jsonResponse(note({ id: 1, statut }));
+        }
+        if (url === "/api/v1/notes/1/historique") {
+          return jsonResponse([
+            transition({ id: 1, ancien_statut: "brouillon", nouveau_statut: "soumise" }),
+            transition({
+              id: 2,
+              acteur: { id: 3, display_name: "Admin" },
+              ancien_statut: "validee",
+              nouveau_statut: "remboursee",
+            }),
+          ]);
+        }
+        if (url === "/api/v1/notes/1/rembourser" && init?.method === "POST") {
+          return new Response(null, { status: 204 });
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "admin");
+
+    await utilisateur.click(
+      await screen.findByRole("button", { name: "Marquer comme remboursé" }),
+    );
+    await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    // Annonce en zone aria-live.
+    const annonce = await screen.findByText("Dossier remboursé.");
+    expect(annonce).toHaveAttribute("role", "status");
+    expect(annonce).toHaveAttribute("aria-live", "polite");
+
+    // Le statut rechargé est reflété, le bouton de remboursement a disparu,
+    // et les actions CSV/impression restent disponibles.
+    await screen.findByText("Remboursée");
+    expect(
+      screen.queryByRole("button", { name: "Marquer comme remboursé" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Télécharger le CSV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Imprimer" })).toBeInTheDocument();
+    // L'historique rechargé montre la transition.
+    expect(screen.getByText("Validée → Remboursée")).toBeInTheDocument();
+    expect(appelsNote).toBeGreaterThanOrEqual(2);
+  });
+
+  test("409 : message de l'API dans une alerte role=alert, puis détail et historique rechargés", async () => {
+    let appelsNote = 0;
+    let appelsHistorique = 0;
+    installerApi(
+      apiAvecJustificatifsParDefaut((url, init) => {
+        if (url === "/api/v1/validation/notes/1") {
+          appelsNote += 1;
+          const statut: StatutNote = appelsNote === 1 ? "validee" : "remboursee";
+          return jsonResponse(note({ id: 1, statut }));
+        }
+        if (url === "/api/v1/notes/1/historique") {
+          appelsHistorique += 1;
+          return jsonResponse([
+            transition({ id: 1 }),
+            transition({
+              id: 2,
+              ancien_statut: "validee",
+              nouveau_statut: "remboursee",
+              motif: "Déjà remboursé ailleurs",
+            }),
+          ]);
+        }
+        if (url === "/api/v1/notes/1/rembourser" && init?.method === "POST") {
+          return jsonResponse({ detail: "Le dossier a déjà été remboursé." }, 409);
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "admin");
+
+    await utilisateur.click(
+      await screen.findByRole("button", { name: "Marquer comme remboursé" }),
+    );
+    await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Le dossier a déjà été remboursé.",
+    );
+    // Resynchronisation : le statut rechargé s'affiche et le motif du conflit est visible.
+    await screen.findByText("Remboursée");
+    expect(screen.getByText("Déjà remboursé ailleurs")).toBeInTheDocument();
+    expect(appelsNote).toBeGreaterThanOrEqual(2);
+    expect(appelsHistorique).toBeGreaterThanOrEqual(2);
+  });
+
+  test("403 (rôle insuffisant) : message de l'API affiché tel quel, sans navigation", async () => {
+    installerApiRemboursement(() =>
+      jsonResponse({ detail: "Seul un administrateur peut rembourser un dossier." }, 403),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "admin");
+
+    await utilisateur.click(
+      await screen.findByRole("button", { name: "Marquer comme remboursé" }),
+    );
+    await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Seul un administrateur peut rembourser un dossier.",
+    );
+    expect(screen.getByRole("heading", { level: 1, name: "Semaine 47" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/LISTE VALIDATION/)).not.toBeInTheDocument();
+  });
+
+  test("401 : onSessionExpiree appelé", async () => {
+    installerApiRemboursement(() => jsonResponse({ detail: "Session expirée." }, 401));
+
+    const utilisateur = userEvent.setup();
+    const { onSessionExpiree } = renderPage("/validation/1", "admin");
+
+    await utilisateur.click(
+      await screen.findByRole("button", { name: "Marquer comme remboursé" }),
+    );
+    await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
 
     await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
   });
