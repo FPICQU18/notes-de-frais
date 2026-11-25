@@ -491,22 +491,27 @@ export function FormulaireDepense({
           >
             Montant
           </label>
-          <input
-            ref={refMontant}
-            id="montant"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0,00\u00A0€"
-            value={montant}
-            onChange={(evenement) => setMontant(evenement.target.value)}
-            disabled={desactive}
-            aria-invalid={erreurs.montant !== null}
-            aria-describedby={erreurs.montant !== null ? "montant-erreur" : undefined}
-            className={`w-full rounded-[16px] border-0 bg-transparent py-1 text-center text-[44px] font-extrabold leading-[1.15] tracking-[-0.03em] tabular-nums text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:text-[var(--muted-foreground)] ${
-              erreurs.montant !== null ? "outline-2 outline-[var(--erreur-texte)]" : ""
-            }`}
-          />
+          <div className="flex w-full items-center justify-center gap-2">
+            <input
+              ref={refMontant}
+              id="montant"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="0,00"
+              value={montant}
+              onChange={(evenement) => setMontant(evenement.target.value)}
+              disabled={desactive}
+              aria-invalid={erreurs.montant !== null}
+              aria-describedby={erreurs.montant !== null ? "montant-erreur" : undefined}
+              className={`min-w-0 flex-1 rounded-[16px] border-0 bg-transparent py-1 text-center text-[44px] font-extrabold leading-[1.15] tracking-[-0.03em] tabular-nums text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:text-[var(--muted-foreground)] ${
+                erreurs.montant !== null ? "outline-2 outline-[var(--erreur-texte)]" : ""
+              }`}
+            />
+            <span aria-hidden="true" className="shrink-0 text-[28px] font-extrabold text-[var(--muted-foreground)]">
+              €
+            </span>
+          </div>
           {erreurs.montant !== null && (
             <p
               id="montant-erreur"
@@ -534,7 +539,7 @@ export function FormulaireDepense({
             disabled={desactive}
             aria-invalid={erreurs.date !== null}
             aria-describedby={erreurs.date !== null ? "date-erreur" : undefined}
-            className="h-[52px] w-full rounded-[18px] border-0 bg-[var(--secondary)] px-4 text-[15px] font-semibold text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:text-[var(--muted-foreground)]"
+            className="h-[52px] min-w-0 w-full appearance-none rounded-[18px] border-0 bg-[var(--secondary)] px-4 text-[15px] font-semibold text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:text-[var(--muted-foreground)]"
           />
           {erreurs.date !== null && (
             <p
