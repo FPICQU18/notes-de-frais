@@ -25,6 +25,7 @@ import {
 } from "../api/client";
 import { VignetteJustificatif } from "../components/depense/VignetteJustificatif";
 import { ActionsDossierFinalise } from "../components/dossier/ActionsDossierFinalise";
+import { Card, CardTitle } from "../components/ui/card";
 import { cleCategorie } from "../lib/categories";
 import {
   formatDateCourte,
@@ -387,7 +388,13 @@ export function ValidationDetailPage({ utilisateur, onSessionExpiree }: Props) {
           )}
 
           {peutRembourser && (
-            <div className="mt-5 print:hidden">
+            <Card className="mt-5 gap-3 rounded-[24px] bg-[var(--card)] p-[16px_18px] shadow-[var(--ombre-carte)] print:hidden">
+              <CardTitle className="text-[17px] font-bold">
+                Virement effectué ?
+              </CardTitle>
+              <p className="m-0 text-[26px] font-extrabold leading-tight tabular-nums">
+                {formatMontant(detail.total_centimes)}
+              </p>
               <button
                 type="button"
                 onClick={() => setConfirmationRemboursement(true)}
@@ -396,7 +403,7 @@ export function ValidationDetailPage({ utilisateur, onSessionExpiree }: Props) {
               >
                 Marquer comme remboursé
               </button>
-            </div>
+            </Card>
           )}
 
           {detail.statut === "soumise" && (

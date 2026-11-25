@@ -259,7 +259,11 @@ export function ValidationPage({ utilisateur, onSessionExpiree }: Props) {
             {donneesAffichees.length > 0 && (
               <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
                 {donneesAffichees.map((note) => (
-                  <CarteValidation key={note.id} note={note} />
+                  <CarteValidation
+                    key={note.id}
+                    note={note}
+                    estAdmin={utilisateur.role === "admin"}
+                  />
                 ))}
               </ul>
             )}

@@ -879,7 +879,8 @@ describe("actions CSV et impression sur le détail de validation (US-030)", () =
 
     // En-tête, dépenses et historique conservent leurs contenus lisibles.
     expect(screen.getByText("Camille")).toBeInTheDocument();
-    expect(screen.getByText("180,00 €")).toBeInTheDocument();
+    // Le total apparaît dans l'en-tête du dossier et dans l'encadré de remboursement (US-035).
+    expect(screen.getAllByText("180,00 €").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Train")).toBeInTheDocument();
     expect(screen.getByText("Déjeuner")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Historique" })).toBeInTheDocument();
@@ -1115,5 +1116,71 @@ describe("remboursement (US-030)", () => {
     await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
 
     await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  });
+
+  test("admin + statut validée : l'encadré « Virement effectué ? » affiche le montant et le bouton", async () => {
+    installerApiRemboursement(() => new Response(null, { status: 204 }));
+
+    renderPage("/validation/1", "admin");
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    const titre = screen.getByText("Virement effectué ?");
+    expect(titre.className).toContain("font-bold");
+    const carte = titre.closest("[data-slot='card']") as HTMLElement;
+    expect(within(carte).getByText("180,00 €")).toBeInTheDocument();
+    const bouton = within(carte).getByRole("button", { name: "Marquer comme remboursé" });
+    expect(bouton.className).toContain("bg-[var(--primary)]");
+    expect(bouton.className).toContain("text-[var(--primary-foreground)]");
+    // Cible ≥ 44 px et focus visible.
+    expect(bouton.className).toContain("h-[56px]");
+    expect(bouton.className).toContain("focus-visible:outline-2");
+  });
+
+  test.each(["valideur", "utilisateur"] as const)(
+    "%s + statut validée : ni l'encadré « Virement effectué ? » ni le bouton ne sont affichés",
+    async (role) => {
+      installerApiRemboursement(() => new Response(null, { status: 204 }));
+
+      renderPage("/validation/1", role);
+
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+      expect(screen.queryByText("Virement effectué ?")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Marquer comme remboursé" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  test("succès : l'encadré « Virement effectué ? » disparaît avec le bouton", async () => {
+    let appelsNote = 0;
+    installerApi(
+      apiAvecJustificatifsParDefaut((url, init) => {
+        if (url === "/api/v1/validation/notes/1") {
+          appelsNote += 1;
+          const statut: StatutNote = appelsNote === 1 ? "validee" : "remboursee";
+          return jsonResponse(note({ id: 1, statut }));
+        }
+        if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+        if (url === "/api/v1/notes/1/rembourser" && init?.method === "POST") {
+          return new Response(null, { status: 204 });
+        }
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+
+    const utilisateur = userEvent.setup();
+    renderPage("/validation/1", "admin");
+
+    await utilisateur.click(
+      await screen.findByRole("button", { name: "Marquer comme remboursé" }),
+    );
+    await utilisateur.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    await screen.findByText("Dossier remboursé.");
+    await screen.findByText("Remboursée");
+    expect(screen.queryByText("Virement effectué ?")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Marquer comme remboursé" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
 import type { NoteValidation, UserRead } from "../api/client";
@@ -11,6 +11,13 @@ const VALIDEUR: UserRead = {
   email: "valideur@example.com",
   display_name: "Valideur",
   role: "valideur",
+};
+
+const ADMIN: UserRead = {
+  id: 20,
+  email: "admin@example.com",
+  display_name: "Admin",
+  role: "admin",
 };
 
 function jsonResponse(donnees: unknown, statut = 200): Response {
@@ -329,4 +336,82 @@ test("onglets accessibles : tablist, liens tab/tabpanel et navigation aux flèch
     "true",
   );
   expect(screen.getByRole("tab", { name: "À traiter" })).toHaveFocus();
+});
+
+describe("pastille « À rembourser » (US-035)", () => {
+  function installerOngletValides(utilisateur: UserRead, notes: NoteValidation[]) {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+      const statut = statutDeUrl(String(entree));
+      if (statut === "validee") return jsonResponse(notes);
+      return jsonResponse([]);
+    });
+    return renderPage({ utilisateur });
+  }
+
+  test("admin + onglet « Validés » : chaque carte validée affiche la pastille « À rembourser »", async () => {
+    const utilisateur = userEvent.setup();
+    installerOngletValides(ADMIN, [
+      noteValidation({ id: 1, statut: "validee", libelle: "Dossier A" }),
+      noteValidation({ id: 2, statut: "validee", libelle: "Dossier B" }),
+    ]);
+
+    await utilisateur.click(await screen.findByRole("tab", { name: "Validés" }));
+    const panneau = screen.getByRole("tabpanel");
+    const pastilles = await within(panneau).findAllByText("À rembourser");
+    expect(pastilles).toHaveLength(2);
+    // Pastille primaire, texte blanc, font-semibold, cible ≥ 44 px de haut.
+    for (const pastille of pastilles) {
+      expect(pastille.className).toContain("font-semibold");
+      expect(pastille.className).toContain("bg-primary");
+      expect(pastille.className).toContain("text-primary-foreground");
+      expect(pastille.className).toContain("min-h-11");
+    }
+  });
+
+  test.each(["valideur", "utilisateur"] as const)(
+    "%s + onglet « Validés » : aucune pastille « À rembourser »",
+    async (role) => {
+      const utilisateur = userEvent.setup();
+      installerOngletValides(
+        { id: 10, email: "x@example.com", display_name: "X", role },
+        [noteValidation({ id: 1, statut: "validee", libelle: "Dossier A" })],
+      );
+
+      await utilisateur.click(await screen.findByRole("tab", { name: "Validés" }));
+      const panneau = await within(screen.getByRole("tabpanel")).findByText("Dossier A");
+      expect(panneau).toBeInTheDocument();
+      expect(within(screen.getByRole("tabpanel")).queryByText("À rembourser")).not.toBeInTheDocument();
+    },
+  );
+
+  test("admin : la pastille n'apparaît que sur les dossiers validés, pas sur les autres onglets", async () => {
+    const utilisateur = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+      const statut = statutDeUrl(String(entree));
+      if (statut === "soumise") {
+        return jsonResponse([noteValidation({ id: 1, statut: "soumise", proprietaire: { id: 99, display_name: "Camille" } })]);
+      }
+      if (statut === "validee") {
+        return jsonResponse([noteValidation({ id: 2, statut: "validee", proprietaire: { id: 99, display_name: "Camille" } })]);
+      }
+      if (statut === "remboursee") {
+        return jsonResponse([noteValidation({ id: 3, statut: "remboursee", proprietaire: { id: 99, display_name: "Camille" } })]);
+      }
+      return jsonResponse([]);
+    });
+    renderPage({ utilisateur: ADMIN });
+
+    // Onglet « À traiter » : pas de pastille.
+    await screen.findAllByRole("listitem");
+    expect(within(screen.getByRole("tabpanel")).queryByText("À rembourser")).not.toBeInTheDocument();
+
+    // Onglet « Validés » : la pastille est là.
+    await utilisateur.click(screen.getByRole("tab", { name: "Validés" }));
+    expect(await within(screen.getByRole("tabpanel")).findByText("À rembourser")).toBeInTheDocument();
+
+    // Onglet « Remboursés » : plus de pastille (déjà remboursé).
+    await utilisateur.click(screen.getByRole("tab", { name: "Remboursés" }));
+    await within(screen.getByRole("tabpanel")).findByText("Remboursée");
+    expect(within(screen.getByRole("tabpanel")).queryByText("À rembourser")).not.toBeInTheDocument();
+  });
 });
