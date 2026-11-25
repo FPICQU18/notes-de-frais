@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as OrmSession
 
 from app.db import get_db
+from app.export_csv import depenses_to_csv, neutraliser_formule
 from app.main import app
 from app.models import Depense, Note, User
 from app.security import hash_password
@@ -300,3 +301,148 @@ def test_toutes_les_categories_ont_leur_libelle_francais(client, db_session):
     assert response.status_code == 200
     lignes = _lignes_csv(response)
     assert [ligne[1] for ligne in lignes[1:]] == [libelle for _, libelle in categories]
+
+
+# --- Neutralisation des formules (US-031) --------------------------------------
+
+# Caractères qui déclenchent une interprétation comme formule dans Excel/LibreOffice.
+PREFIXES_FORMULE = ["=", "+", "-", "@", "\t", "\r", "\n"]
+
+
+def _depense_sans_db(libelle: str, categorie: str = "repas") -> Depense:
+    """Objet Depense non persisté, suffisant pour `depenses_to_csv`."""
+    return Depense(
+        user_id=1,
+        libelle=libelle,
+        date_depense=date(2024, 1, 15),
+        montant_centimes=1250,
+        categorie=categorie,
+        note_id=None,
+    )
+
+
+@pytest.mark.parametrize("prefixe", PREFIXES_FORMULE)
+def test_neutraliser_formule_prefixe_apostrophe(prefixe):
+    assert neutraliser_formule(f"{prefixe}1+1") == f"'{prefixe}1+1"
+
+
+@pytest.mark.parametrize(
+    "texte",
+    [
+        "Repas client",
+        "x = y au milieu",
+        "x + y au milieu",
+        "a\tb",  # tabulation au milieu : pas de préfixe
+        "ligne 1\nligne 2",  # saut de ligne au milieu : pas de préfixe
+        "",
+        "'déjà préfixé",
+    ],
+)
+def test_neutraliser_formule_inchange_si_pas_en_tete(texte):
+    assert neutraliser_formule(texte) == texte
+
+
+@pytest.mark.parametrize("prefixe", PREFIXES_FORMULE)
+def test_export_libelle_avec_prefixe_formule(client, db_session, prefixe):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    libelle = f"{prefixe}+100"
+    _make_depense(db_session, user, note_id=note.id, libelle=libelle)
+    response = client.get(f"/api/v1/notes/{note.id}/export.csv")
+    assert response.status_code == 200
+    lignes = _lignes_csv(response)
+    assert lignes[1][2] == f"'{libelle}"
+
+
+@pytest.mark.parametrize("prefixe", PREFIXES_FORMULE)
+def test_export_categorie_inconnue_avec_prefixe_formule(prefixe):
+    """Catégorie inconnue : le repli sur la valeur brute est neutralisé lui aussi.
+
+    Une catégorie invalide ne peut pas être insérée en base (contrainte CHECK),
+    donc on teste la sérialisation pure via `depenses_to_csv`.
+    """
+    categorie = f"{prefixe}cat"
+    depense = _depense_sans_db("Dépense test", categorie=categorie)
+    texte = depenses_to_csv([depense])
+    # Le champ peut être ré-écrit entre guillemets par le writer csv : on relit
+    # proprement avec csv.reader pour comparer la valeur du champ.
+    lignes = list(csv.reader(io.StringIO(texte.lstrip("\ufeff")), delimiter=";"))
+    attendu = f"'{categorie}"
+    assert lignes[1][1] == attendu
+    # Et dans le texte brut, le préfixe apostrophe est présent tel quel.
+    assert attendu in texte
+
+
+def test_export_libelle_normal_inchange(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    _make_depense(db_session, user, note_id=note.id, libelle="Repas client")
+    response = client.get(f"/api/v1/notes/{note.id}/export.csv")
+    assert response.status_code == 200
+    lignes = _lignes_csv(response)
+    assert lignes[1][2] == "Repas client"
+
+
+def test_export_categorie_avec_tabulation_au_milieu():
+    """Tabulation au milieu : échappement CSV standard, PAS de préfixe apostrophe."""
+    categorie = "au\ttres"
+    depense = _depense_sans_db("Dépense test", categorie=categorie)
+    texte = depenses_to_csv([depense])
+    assert '"au\ttres"' in texte  # champ cité, tabulation conservée
+    assert "'au" not in texte  # pas de préfixe apostrophe
+    # Relisible par csv.reader : la valeur du champ est intacte.
+    lignes = list(csv.reader(io.StringIO(texte.lstrip("\ufeff")), delimiter=";"))
+    assert lignes[1][1] == categorie
+
+
+def test_export_libelle_avec_saut_de_ligne_au_milieu(client, db_session):
+    """Saut de ligne au milieu : champ cité, caractère conservé, pas de préfixe."""
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    libelle = "ligne 1\nligne 2"
+    _make_depense(db_session, user, note_id=note.id, libelle=libelle)
+    response = client.get(f"/api/v1/notes/{note.id}/export.csv")
+    assert response.status_code == 200
+    texte = response.content.decode("utf-8-sig")
+    assert '"ligne 1\nligne 2"' in texte
+    assert "'ligne" not in texte
+    lignes = _lignes_csv(response)
+    assert lignes[1][2] == libelle
+
+
+def test_export_plusieurs_depenses_toutes_neutralisees(client, db_session):
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    libelles = ["=SUM(A1:A2)", "+100", "-50", "@cmd", "\tTab", "\rCR", "\nLF", "Normal"]
+    for index, libelle in enumerate(libelles):
+        _make_depense(
+            db_session,
+            user,
+            note_id=note.id,
+            libelle=libelle,
+            date_depense=date(2024, 1, index + 1),
+        )
+    response = client.get(f"/api/v1/notes/{note.id}/export.csv")
+    assert response.status_code == 200
+    lignes = _lignes_csv(response)
+    assert len(lignes) == 1 + len(libelles)
+    for ligne, libelle in zip(lignes[1:], libelles, strict=True):
+        attendu = f"'{libelle}" if libelle.startswith(tuple(PREFIXES_FORMULE)) else libelle
+        assert ligne[2] == attendu
+
+
+def test_export_structure_inchangee_avec_neutralisation(client, db_session):
+    """BOM, en-tête, CRLF et en-têtes HTTP restent identiques malgré la neutralisation."""
+    user = _connect(client, db_session)
+    note = _make_note(db_session, user)
+    _make_depense(db_session, user, note_id=note.id, libelle="=1+1", montant_centimes=2450)
+    response = client.get(f"/api/v1/notes/{note.id}/export.csv")
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == "text/csv; charset=utf-8"
+    assert response.headers["Content-Disposition"] == f'attachment; filename="note-{note.id}.csv"'
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    texte = response.content.decode("utf-8")
+    assert texte.split("\r\n")[0] == "\ufeffDate;Catégorie;Libellé;Montant"
+    assert texte.split("\r\n")[1] == "2024-01-15;Repas;'=1+1;24,50"
+    assert texte.endswith("\r\n") and not texte.endswith("\r\n\r\n")
