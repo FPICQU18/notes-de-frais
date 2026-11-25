@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { ChevronRight, LogOut, Users } from "lucide-react";
 
 import { apiPost, type UserRead } from "../api/client";
+import { BoutonRetour } from "../components/BoutonRetour";
 import { initiales } from "../lib/format";
 
 const LIBELLES_ROLE: Record<string, string> = {
@@ -46,13 +47,16 @@ export function ProfilPage({ utilisateur, onDeconnecte }: Props) {
 
   return (
     <main className="mx-auto w-full max-w-[560px] px-5 pb-28 pt-6">
-      <h1
-        ref={refTitre}
-        tabIndex={-1}
-        className="m-0 text-2xl font-extrabold tracking-[-0.01em] focus:outline-none"
-      >
-        Profil
-      </h1>
+      <header className="mb-5 flex h-16 items-center gap-2">
+        <BoutonRetour />
+        <h1
+          ref={refTitre}
+          tabIndex={-1}
+          className="m-0 flex-1 text-2xl font-extrabold tracking-[-0.01em] focus:outline-none"
+        >
+          Profil
+        </h1>
+      </header>
 
       <section
         aria-label="Vos informations"
