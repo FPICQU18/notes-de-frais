@@ -73,6 +73,19 @@ function mockApi(sessionInitiale: UserRead | null = null) {
       if (url.endsWith("/api/v1/depenses") && methode === "GET") {
         return jsonResponse([]);
       }
+      if (/\/api\/v1\/depenses\/\d+$/.test(url) && methode === "GET") {
+        return jsonResponse({
+          id: 1,
+          libelle: "Déjeuner",
+          date_depense: "2026-11-15",
+          montant_centimes: 2450,
+          categorie: "repas",
+          commentaire: null,
+          note_id: null,
+          created_at: "2026-11-15T12:00:00Z",
+          updated_at: "2026-11-15T12:00:00Z",
+        });
+      }
       if (/\/api\/v1\/validation\/notes\/\d+$/.test(url) && methode === "GET") {
         return jsonResponse({
           id: 123,
@@ -638,14 +651,10 @@ test("admin : /dossiers affiche le titre « Dossiers » et l'état vide", async 
 
 test.each([
   [UTILISATEUR, "/depenses"],
-  [UTILISATEUR, "/depenses/nouvelle"],
-  [UTILISATEUR, "/depenses/1"],
   [VALIDEUR, "/depenses"],
-  [VALIDEUR, "/depenses/nouvelle"],
-  [VALIDEUR, "/depenses/1"],
   [ADMIN, "/depenses"],
-  [ADMIN, "/depenses/nouvelle"],
-  [ADMIN, "/depenses/1"],
+  [UTILISATEUR, "/dossiers"],
+  [UTILISATEUR, "/"],
 ])(
   "barre de navigation présente et utilisable sur %s pour %s",
   async (utilisateur, url) => {
@@ -667,5 +676,29 @@ test.each([
     } else {
       expect(within(nav).getByRole("link", { name: "Validation" })).toBeInTheDocument();
     }
+  },
+);
+
+test.each([
+  [UTILISATEUR, "/depenses/nouvelle"],
+  [UTILISATEUR, "/depenses/1"],
+  [VALIDEUR, "/depenses/nouvelle"],
+  [VALIDEUR, "/depenses/1"],
+  [ADMIN, "/depenses/nouvelle"],
+  [ADMIN, "/depenses/1"],
+])(
+  "barre de navigation masquée sur l'écran de formulaire %s pour %s (bouton « Enregistrer » accessible)",
+  async (utilisateur, url) => {
+    mockApi(utilisateur);
+    renderApp(url);
+
+    // L'écran de formulaire s'affiche (bouton d'enregistrement présent)…
+    expect(
+      await screen.findByRole("button", { name: /Enregistrer/ }),
+    ).toBeInTheDocument();
+    // …et la barre flottante est absente : pas de chevauchement possible.
+    expect(
+      screen.queryByRole("navigation", { name: "Navigation principale" }),
+    ).not.toBeInTheDocument();
   },
 );

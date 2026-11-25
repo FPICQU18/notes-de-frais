@@ -103,12 +103,48 @@ test("formulaire vierge : montant/libellé vides, date du jour à Paris, aucune 
   expect(tuiles).toHaveLength(7);
 });
 
-test("champ montant : label « Montant », inputmode decimal, centré, tabular-nums", () => {
+test("champ montant : label « Montant », inputmode decimal, centré, tabular-nums, non grisé", () => {
   renderFormulaire();
   const champ = screen.getByLabelText("Montant");
   expect(champ).toHaveAttribute("inputmode", "decimal");
   expect(champ.className).toContain("text-center");
   expect(champ.className).toContain("tabular-nums");
+  // Non grisé : pas de fond de champ ni d'opacité de désactivation.
+  expect(champ).toBeEnabled();
+  expect(champ.className).not.toContain("bg-[var(--secondary)]");
+  expect(champ.className).not.toContain("disabled:opacity");
+});
+
+test("champ montant : placeholder « 0,00 » et symbole « € » à côté du champ, pas dans l'input", () => {
+  renderFormulaire();
+  const champ = screen.getByLabelText("Montant");
+  expect(champ).toHaveAttribute("placeholder", "0,00");
+  expect(champ).not.toHaveValue(expect.stringContaining("€"));
+  // Le symbole € est un élément à côté de l'input, pas sa valeur ni son placeholder.
+  const conteneur = champ.parentElement as HTMLElement;
+  const symbole = within(conteneur).getByText("€");
+  expect(symbole).toHaveAttribute("aria-hidden", "true");
+  expect(symbole.tagName).toBe("SPAN");
+  expect(champ.getAttribute("placeholder")).not.toContain("€");
+});
+
+test("champ date : min-w-0 w-full appearance-none (pas de débordement iPhone), sans min-w forcée", () => {
+  renderFormulaire();
+  const champ = screen.getByLabelText("Date");
+  expect(champ.className).toContain("min-w-0");
+  expect(champ.className).toContain("w-full");
+  expect(champ.className).toContain("appearance-none");
+  expect(champ.className).not.toMatch(/min-w-\[\d+px\]/);
+});
+
+test("annulation : le bouton retour (« Retour ») revient en arrière sans aucun appel réseau", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.click(screen.getByRole("button", { name: "Retour" }));
+
+  expect(fetchMock).not.toHaveBeenCalled();
 });
 
 test("bloc catégories : fieldset + legend, 7 tuiles dans l'ordre, aria-pressed", async () => {

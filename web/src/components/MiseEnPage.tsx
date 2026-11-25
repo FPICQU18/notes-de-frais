@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useLocation } from "react-router";
 import { Check, Folder, Home, Plus, Receipt, User } from "lucide-react";
 
 import type { UserRead } from "../api/client";
+import { estRouteFormulaireDepense } from "../lib/routes";
 
 type Props = {
   utilisateur: UserRead | null;
@@ -38,12 +39,17 @@ function LienNavigation({
 export function MiseEnPage({ utilisateur }: Props) {
   const estValideur =
     utilisateur?.role === "valideur" || utilisateur?.role === "admin";
+  // Sur les écrans de formulaire (saisie / modification), la barre flottante
+  // masquerait le bouton « Enregistrer » : on la retire du flux.
+  const { pathname } = useLocation();
+  const masquerBarre = estRouteFormulaireDepense(pathname);
 
   return (
     <div className="mise-en-page">
       <div className="mise-en-page__contenu">
         <Outlet />
       </div>
+      {!masquerBarre && (
       <nav className="barre-navigation print:hidden" aria-label="Navigation principale">
         <LienNavigation
           vers="/"
@@ -84,6 +90,7 @@ export function MiseEnPage({ utilisateur }: Props) {
           />
         )}
       </nav>
+      )}
     </div>
   );
 }
