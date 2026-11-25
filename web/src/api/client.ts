@@ -288,3 +288,59 @@ export async function apiGetJustificatif(idDepense: number): Promise<Response | 
   }
   return response;
 }
+
+/** Résultat du téléchargement d'un export CSV : binaire + nom de fichier. */
+export interface CsvTelecharge {
+  blob: Blob;
+  nomFichier: string;
+}
+
+/**
+ * Extrait le nom de fichier d'un en-tête `Content-Disposition` de la forme
+ * `attachment; filename="note-12.csv"` (ou `filename*=UTF-8''…`). Renvoie
+ * `null` quand l'en-tête est absent ou illisible.
+ */
+export function nomFichierDepuisContentDisposition(enTete: string | null): string | null {
+  if (enTete === null) return null;
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(enTete);
+  if (utf8 !== null) {
+    try {
+      return decodeURIComponent(utf8[1].trim());
+    } catch {
+      return null;
+    }
+  }
+  const simple = /filename="?([^";]+)"?/i.exec(enTete);
+  if (simple === null) return null;
+  const nom = simple[1].trim();
+  return nom === "" ? null : nom;
+}
+
+/**
+ * Télécharge l'export CSV d'un dossier : `GET /api/v1/notes/{id}/export.csv`.
+ * Renvoie le `Blob` reçu et le nom de fichier lu dans `Content-Disposition`,
+ * avec le repli `note-<id>.csv` quand l'en-tête est absent ou illisible.
+ * Même mapping d'erreurs que `requete()` : `ApiError(0, MESSAGE_RESEAU)` sur
+ * panne réseau, message issu de `detail` sinon.
+ */
+export async function apiTelechargerCsv(idNote: number): Promise<CsvTelecharge> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/v1/notes/${idNote}/export.csv`, {
+      method: "GET",
+      headers: { Accept: "text/csv, application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, MESSAGE_RESEAU);
+  }
+  if (!response.ok) {
+    const { message, detail } = await lireErreur(response);
+    throw new ApiError(response.status, message, detail);
+  }
+  const blob = await response.blob();
+  const nomFichier =
+    nomFichierDepuisContentDisposition(response.headers.get("Content-Disposition")) ??
+    `note-${idNote}.csv`;
+  return { blob, nomFichier };
+}

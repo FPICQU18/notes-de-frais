@@ -14,6 +14,7 @@ import {
   type TransitionRead,
 } from "../api/client";
 import { CarteDepense } from "../components/depense/CarteDepense";
+import { ActionsDossierFinalise } from "../components/dossier/ActionsDossierFinalise";
 import { PanneauAjoutDepenses } from "../components/dossier/PanneauAjoutDepenses";
 import { cleCategorie, libelleCategorie } from "../lib/categories";
 import { formatDateHeure, formatMontant, formatNbDepenses } from "../lib/format";
@@ -46,6 +47,9 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
   const detail = note.donnees;
   const enBrouillon = detail !== null && detail.statut === "brouillon";
   const enLectureSeule = detail !== null && detail.statut !== "brouillon";
+  // Export CSV et impression réservés aux dossiers finalisés (US-029).
+  const estFinalise =
+    detail !== null && (detail.statut === "validee" || detail.statut === "remboursee");
 
   const [messageAlerte, setMessageAlerte] = useState<string | null>(null);
   const [annonce, setAnnonce] = useState<string | null>(null);
@@ -200,7 +204,10 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
   }
 
   return (
-    <main className="page" aria-busy={note.chargement || undefined}>
+    <main
+      className="page print:bg-white print:text-black"
+      aria-busy={note.chargement || undefined}
+    >
       {note.chargement && detail === null && (
         <p className="chargement" role="status">
           Chargement…
@@ -243,7 +250,7 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
 
       {detail !== null && (
         <>
-          <header className="mb-2 flex items-center gap-3">
+          <header className="mb-2 flex items-center gap-3 print:hidden">
             <Link
               to="/dossiers"
               aria-label="Retour aux dossiers"
@@ -305,7 +312,7 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
 
           <section
             aria-label="Total"
-            className="mt-4 rounded-[26px] bg-[var(--card)] p-[20px] shadow-[var(--ombre-carte)]"
+            className="mt-4 rounded-[26px] bg-[var(--card)] p-[20px] shadow-[var(--ombre-carte)] print:rounded-none print:bg-white print:p-0 print:shadow-none print:text-black"
           >
             <p className="m-0 text-[13px] font-bold text-[var(--muted-foreground)]">Total</p>
             <p className="m-0 mt-1 text-[40px] font-extrabold leading-none tabular-nums">
@@ -314,7 +321,10 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
 
             {segments.length > 0 && (
               <>
-                <div aria-hidden="true" className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full">
+                <div
+                  aria-hidden="true"
+                  className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full print:hidden"
+                >
                   {segments.map((segment) => (
                     <div
                       key={segment.categorie}
@@ -325,9 +335,9 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
                     />
                   ))}
                 </div>
-                <ul className="m-0 mt-4 flex list-none flex-col gap-2 p-0">
+                <ul className="m-0 mt-4 flex list-none flex-col gap-2 p-0 print:mt-2 print:gap-1">
                   {segments.map((segment) => (
-                    <li key={segment.categorie} className="flex items-center gap-2.5">
+                    <li key={segment.categorie} className="flex items-center gap-2.5 print:text-black">
                       <span
                         aria-hidden="true"
                         className="inline-block h-3 w-3 shrink-0 rounded-full"
@@ -375,8 +385,16 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
             </ul>
           )}
 
+          {estFinalise && detail !== null && (
+            <ActionsDossierFinalise
+              idNote={detail.id}
+              onErreur={(message) => setMessageAlerte(message)}
+              onSessionExpiree={onSessionExpiree}
+            />
+          )}
+
           {enBrouillon && (
-            <div className="mt-5 flex flex-col gap-2.5">
+            <div className="mt-5 flex flex-col gap-2.5 print:hidden">
               <button
                 type="button"
                 onClick={() => setPanneauAjout(true)}
@@ -402,7 +420,10 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
           )}
 
           {enLectureSeule && (
-            <section aria-label="Historique" className="mt-5">
+            <section
+              aria-label="Historique"
+              className="mt-5 print:break-inside-avoid print:text-black"
+            >
               <h2 className="m-0 text-[18px] font-extrabold tracking-[-0.01em]">Historique</h2>
 
               {erreurHistorique !== null && (
@@ -423,7 +444,7 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
                   {historique.map((transition) => (
                     <li
                       key={transition.id}
-                      className="rounded-[20px] bg-[var(--card)] p-[14px_16px] shadow-[var(--ombre-carte)]"
+                      className="rounded-[20px] bg-[var(--card)] p-[14px_16px] shadow-[var(--ombre-carte)] print:break-inside-avoid print:rounded-none print:bg-white print:p-0 print:shadow-none print:text-black"
                     >
                       <p className="m-0 text-[13px] font-semibold text-[var(--muted-foreground)]">
                         {formatDateHeure(transition.created_at)} · {transition.acteur.display_name}
@@ -449,14 +470,14 @@ export function DossierDetailPage({ onSessionExpiree }: Props) {
               type="button"
               onClick={() => void rouvrir()}
               disabled={actionEnCours}
-              className="mt-5 h-[52px] w-full rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:opacity-60"
+              className="mt-5 h-[52px] w-full rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:opacity-60 print:hidden"
             >
               Rouvrir le dossier
             </button>
           )}
 
           {enBrouillon && (
-            <div className="sticky bottom-0 mt-5 bg-[var(--background)] pb-2 pt-2">
+            <div className="sticky bottom-0 mt-5 bg-[var(--background)] pb-2 pt-2 print:hidden">
               <button
                 type="button"
                 onClick={() => setConfirmationEnvoi(true)}

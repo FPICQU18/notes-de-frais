@@ -1,11 +1,18 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+/// <reference types="node" />
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-import type { Depense, NoteDetail, StatutNote, TransitionRead } from "../api/client";
+import { MESSAGE_RESEAU, type Depense, type NoteDetail, type StatutNote, type TransitionRead } from "../api/client";
+import { MiseEnPage } from "../components/MiseEnPage";
 import { DossierDetailPage } from "./DossierDetailPage";
 import { formatDateHeure } from "../lib/format";
+
+/** Feuille d'impression globale, lue telle qu'écrite sur disque (cwd = racine web). */
+const printCss = readFileSync(join(process.cwd(), "src", "print.css"), "utf-8");
 
 function jsonResponse(donnees: unknown, statut = 200): Response {
   return new Response(JSON.stringify(donnees), {
@@ -736,5 +743,303 @@ describe("erreurs de chargement", () => {
     const { onSessionExpiree } = renderPage();
 
     await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  });
+});
+
+describe("export CSV et impression (US-029)", () => {
+  /** Réponse CSV avec l'en-tête Content-Disposition usuel. */
+  function csvResponse(
+    contenu = "date;libellé\n2026-11-17;Train\n",
+    enTete: string | null = 'attachment; filename="note-1.csv"',
+  ): Response {
+    return new Response(contenu, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        ...(enTete === null ? {} : { "Content-Disposition": enTete }),
+      },
+    });
+  }
+
+  /** Mock fetch : le dossier a le statut donné, l'historique renvoie une transition. */
+  function installerApiStatut(statut: StatutNote) {
+    return installerApi((url) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut }));
+      if (url === "/api/v1/notes/1/historique") {
+        return jsonResponse([
+          transition({ id: 1, ancien_statut: "brouillon", nouveau_statut: statut }),
+        ]);
+      }
+      return jsonResponse({ detail: "Note introuvable." }, 404);
+    });
+  }
+
+  /** Bouchons URL.createObjectURL / revokeObjectURL + espion de clic sur le lien créé. */
+  function installerUrlObjet() {
+    const cree = vi.fn(() => "blob:mock-url");
+    const revoque = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, {
+      createObjectURL: cree,
+      revokeObjectURL: revoque,
+    }));
+    const clics: { href: string; download: string }[] = [];
+    const createElementOriginal = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string, options?: ElementCreationOptions) => {
+      const element = createElementOriginal(tag, options);
+      if (tag === "a") {
+        vi.spyOn(element as HTMLAnchorElement, "click").mockImplementation(() => {
+          const lien = element as HTMLAnchorElement;
+          clics.push({ href: lien.href, download: lien.download });
+        });
+      }
+      return element;
+    });
+    return { cree, revoque, clics };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test.each(["validee", "remboursee"] as const)(
+    "statut %s : « Télécharger le CSV » et « Imprimer » sont disponibles",
+    async (statut) => {
+      installerApiStatut(statut);
+
+      renderPage();
+
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+      expect(
+        screen.getByRole("button", { name: "Télécharger le CSV" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Imprimer" })).toBeInTheDocument();
+    },
+  );
+
+  test.each(["brouillon", "soumise", "refusee"] as const)(
+    "statut %s : aucune des deux actions n'est affichée",
+    async (statut) => {
+      installerApiStatut(statut);
+
+      renderPage();
+
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+      expect(
+        screen.queryByRole("button", { name: "Télécharger le CSV" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Imprimer" })).not.toBeInTheDocument();
+    },
+  );
+
+  test("« Télécharger le CSV » appelle la bonne URL, crée un lien temporaire avec le nom de l'en-tête et révoque l'URL d'objet", async () => {
+    const fetchMock = installerApi((url) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "validee" }));
+      if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+      if (url === "/api/v1/notes/1/export.csv") {
+        return csvResponse("date;libellé\n", 'attachment; filename="note-1.csv"');
+      }
+      return jsonResponse({ detail: "Note introuvable." }, 404);
+    });
+    const urlObjet = installerUrlObjet();
+
+    const utilisateur = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    await utilisateur.click(screen.getByRole("button", { name: "Télécharger le CSV" }));
+
+    await waitFor(() => expect(urlObjet.clics).toHaveLength(1));
+    const appelExport = fetchMock.mock.calls.filter(
+      ([entree, init]) =>
+        String(entree) === "/api/v1/notes/1/export.csv" && (init?.method ?? "GET") === "GET",
+    );
+    expect(appelExport).toHaveLength(1);
+    expect(appelExport[0][1]?.credentials).toBe("same-origin");
+    expect(urlObjet.cree).toHaveBeenCalledTimes(1);
+    expect(urlObjet.clics[0]).toEqual({ href: "blob:mock-url", download: "note-1.csv" });
+    expect(urlObjet.revoque).toHaveBeenCalledWith("blob:mock-url");
+    // Aucune navigation : la page reste sur le dossier.
+    expect(screen.getByRole("heading", { level: 1, name: "Semaine 47" })).toBeInTheDocument();
+  });
+
+  test("repli du nom de fichier quand l'en-tête Content-Disposition est absent", async () => {
+    installerApi((url) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "remboursee" }));
+      if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+      if (url === "/api/v1/notes/1/export.csv") return csvResponse("a;b\n", null);
+      return jsonResponse({ detail: "Note introuvable." }, 404);
+    });
+    const urlObjet = installerUrlObjet();
+
+    const utilisateur = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    await utilisateur.click(screen.getByRole("button", { name: "Télécharger le CSV" }));
+
+    await waitFor(() => expect(urlObjet.clics).toHaveLength(1));
+    expect(urlObjet.clics[0].download).toBe("note-1.csv");
+  });
+
+  test("échec 404 de l'export : alerte role=alert avec le message de l'API, la page reste sur le dossier", async () => {
+    installerApi((url) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "validee" }));
+      if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+      if (url === "/api/v1/notes/1/export.csv") {
+        return jsonResponse({ detail: "Note introuvable." }, 404);
+      }
+      return jsonResponse({ detail: "Note introuvable." }, 404);
+    });
+
+    const utilisateur = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    await utilisateur.click(screen.getByRole("button", { name: "Télécharger le CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Note introuvable.");
+    expect(screen.getByRole("heading", { level: 1, name: "Semaine 47" })).toBeInTheDocument();
+  });
+
+  test("panne réseau lors de l'export : alerte avec le message réseau", async () => {
+    installerApi((url) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "validee" }));
+      if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+      if (url === "/api/v1/notes/1/export.csv") throw new Error("réseau");
+      return jsonResponse({ detail: "Note introuvable." }, 404);
+    });
+
+    const utilisateur = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    await utilisateur.click(screen.getByRole("button", { name: "Télécharger le CSV" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(MESSAGE_RESEAU);
+  });
+
+  test("pendant le téléchargement le bouton est désactivé et aria-busy ; un double clic ne déclenche qu'un seul appel", async () => {
+    let resoudreExport!: (reponse: Response) => void;
+    const fetchMock = installerApi((url) => {
+      if (url === "/api/v1/notes/1") return jsonResponse(note({ id: 1, statut: "validee" }));
+      if (url === "/api/v1/notes/1/historique") return jsonResponse([]);
+      if (url === "/api/v1/notes/1/export.csv") {
+        return new Promise<Response>((resoudre) => {
+          resoudreExport = resoudre;
+        });
+      }
+      return jsonResponse({ detail: "Note introuvable." }, 404);
+    });
+    installerUrlObjet();
+
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    const bouton = screen.getByRole("button", { name: "Télécharger le CSV" });
+    // Double clic avant même le premier re-rendu.
+    fireEvent.click(bouton);
+    fireEvent.click(bouton);
+
+    expect(bouton).toBeDisabled();
+    expect(bouton).toHaveAttribute("aria-busy", "true");
+
+    resoudreExport(csvResponse());
+    await waitFor(() => expect(bouton).not.toBeDisabled());
+    expect(bouton).not.toHaveAttribute("aria-busy");
+
+    const appelsExport = fetchMock.mock.calls.filter(
+      ([entree]) => String(entree) === "/api/v1/notes/1/export.csv",
+    );
+    expect(appelsExport).toHaveLength(1);
+  });
+
+  test("« Imprimer » appelle window.print() une fois, sans aucune requête réseau", async () => {
+    const fetchMock = installerApiStatut("validee");
+    const printMock = vi.fn();
+    vi.stubGlobal("print", printMock);
+
+    const utilisateur = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    const nbAppelsAvant = fetchMock.mock.calls.length;
+    await utilisateur.click(screen.getByRole("button", { name: "Imprimer" }));
+
+    expect(printMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.length).toBe(nbAppelsAvant);
+  });
+
+  test("impression : la barre de navigation, les actions et les liens d'édition sont masqués en print:", async () => {
+    installerApiStatut("validee");
+
+    render(
+      <MemoryRouter initialEntries={["/dossiers/1"]}>
+        <Routes>
+          <Route
+            element={
+              <MiseEnPage
+                utilisateur={{ id: 1, email: "a@b.c", display_name: "Camille", role: "utilisateur" }}
+              />
+            }
+          >
+            <Route
+              path="/dossiers/:id"
+              element={<DossierDetailPage onSessionExpiree={vi.fn()} />}
+            />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+
+    const nav = screen.getByRole("navigation", { name: "Navigation principale" });
+    expect(nav.className).toContain("print:hidden");
+
+    const boutonCsv = screen.getByRole("button", { name: "Télécharger le CSV" });
+    const boutonImprimer = screen.getByRole("button", { name: "Imprimer" });
+    expect(boutonCsv.closest("div")!.className).toContain("print:hidden");
+    expect(boutonImprimer.closest("div")!.className).toContain("print:hidden");
+
+    const entete = screen.getByRole("banner");
+    expect(entete.className).toContain("print:hidden");
+
+    // Liens vers les dépenses : visibles à l'impression (pas de print:hidden).
+    const liensDepense = screen
+      .getAllByRole("link")
+      .filter((lien) => /^\/depenses\/\d+$/.test(lien.getAttribute("href") ?? ""));
+    expect(liensDepense.length).toBeGreaterThan(0);
+    for (const lien of liensDepense) {
+      expect(lien.className).not.toContain("print:hidden");
+      expect(lien.closest("li")!.className).toContain("print:break-inside-avoid");
+    }
+  });
+
+  test("impression : en-tête du dossier, dépenses et historique conservent leurs contenus visibles", async () => {
+    installerApiStatut("remboursee");
+
+    renderPage();
+
+    await screen.findByRole("heading", { level: 1, name: "Semaine 47" });
+    // En-tête : titre, statut, total, nombre de dépenses.
+    expect(screen.getByText("Remboursée")).toBeInTheDocument();
+    expect(screen.getByText("180,00 €")).toBeInTheDocument();
+    expect(screen.getByText("2 dépenses")).toBeInTheDocument();
+    // Dépenses : libellé, date, montant.
+    expect(screen.getByText("Train")).toBeInTheDocument();
+    expect(screen.getAllByText("79,00 €").length).toBeGreaterThan(0);
+    expect(screen.getByText("Déjeuner")).toBeInTheDocument();
+    // Historique visible.
+    await screen.findByRole("heading", { name: "Historique" });
+    expect(screen.getByText("Brouillon → Remboursée")).toBeInTheDocument();
+  });
+
+  test("feuille d'impression globale : marges 12 mm, fond blanc, texte noir", () => {
+    expect(printCss).toContain("@media print");
+    expect(printCss).toMatch(/@page\s*{[^}]*margin:\s*12mm/);
+    expect(printCss).toMatch(/background:\s*#ffffff\s*!important/);
+    expect(printCss).toMatch(/color:\s*#000000\s*!important/);
+    // Aucune classe d'écran n'est définie dans print.css.
+    expect(printCss).not.toMatch(/^\.[a-z-]+\s*{/m);
   });
 });

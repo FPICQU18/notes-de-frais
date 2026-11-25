@@ -1,0 +1,18 @@
+/*
+  Règles d'impression globales (US-029) — uniquement des propriétés que les
+  variantes Tailwind `print:` des composants ne peuvent pas exprimer :
+  marges de page et couleur de fond de la page imprimée.
+  Aucune classe d'écran n'est définie ici.
+*/
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
