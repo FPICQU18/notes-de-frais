@@ -151,7 +151,10 @@ export function AppRoutes() {
           path="/validation/:id"
           element={
             estValideur ? (
-              <ValidationDetailPage onSessionExpiree={gererDeconnexion} />
+              <ValidationDetailPage
+                utilisateur={utilisateur}
+                onSessionExpiree={gererDeconnexion}
+              />
             ) : (
               <Navigate to="/" replace />
             )
