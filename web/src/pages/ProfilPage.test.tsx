@@ -104,6 +104,33 @@ test.each([
   },
 );
 
+test("bouton « Retour » présent en haut de la page Profil, au clic retour à la page précédente", async () => {
+  const utilisateur = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/", "/profil"]} initialIndex={1}>
+      <Routes>
+        <Route path="/" element={<div>Page accueil</div>} />
+        <Route
+          path="/profil"
+          element={
+            <ProfilPage utilisateur={UTILISATEUR} onDeconnecte={() => {}} />
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const bouton = await screen.findByRole("button", { name: "Retour" });
+  expect(bouton).toHaveTextContent("Retour");
+  // Cible ≥ 44 px, focus visible.
+  expect(bouton.className).toContain("h-11");
+  expect(bouton.className).toContain("min-w-11");
+  expect(bouton.className).toContain("focus-visible:outline-2");
+
+  await utilisateur.click(bouton);
+  expect(await screen.findByText("Page accueil")).toBeInTheDocument();
+});
+
 test("admin : le lien « Gérer les comptes » mène à /admin/comptes", async () => {
   renderProfil({ utilisateur: ADMIN });
 

@@ -110,6 +110,31 @@ afterEach(() => {
 
 /* ----------------------------------------------------------- liste */
 
+test("bouton « Retour » présent en haut de la page Comptes, au clic retour à la page précédente (/profil)", async () => {
+  mockFetch();
+  const utilisateur = userEvent.setup();
+  render(
+    <MemoryRouter initialEntries={["/profil", "/admin/comptes"]} initialIndex={1}>
+      <Routes>
+        <Route path="/profil" element={<div>Page profil</div>} />
+        <Route
+          path="/admin/comptes"
+          element={<ComptesPage utilisateur={ADMIN} onSessionExpiree={vi.fn()} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  const bouton = await screen.findByRole("button", { name: "Retour au profil" });
+  expect(bouton).toHaveTextContent("Retour");
+  expect(bouton.className).toContain("h-11");
+  expect(bouton.className).toContain("min-w-11");
+  expect(bouton.className).toContain("focus-visible:outline-2");
+
+  await utilisateur.click(bouton);
+  expect(await screen.findByText("Page profil")).toBeInTheDocument();
+});
+
 test("liste des comptes : nom, e-mail, rôle en libellé français et état, dans l'ordre de l'API", async () => {
   mockFetch();
   renderComptes();

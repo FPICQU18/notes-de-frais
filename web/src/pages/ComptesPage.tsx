@@ -7,9 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router";
-import { ChevronLeft, Plus } from "lucide-react";
-
+import { Plus } from "lucide-react";
 import {
   ApiError,
   apiPatch,
@@ -19,6 +17,7 @@ import {
 } from "../api/client";
 import { initiales } from "../lib/format";
 import { useApiGet } from "../lib/useApiGet";
+import { BoutonRetour } from "../components/BoutonRetour";
 
 /** Compte renvoyé par `GET /api/v1/users` (admin seulement, tri `id` croissant). */
 export interface CompteRead {
@@ -67,7 +66,6 @@ type ResultatCreation =
  * (403, 409, 422) viennent du serveur et sont affichés tels quels.
  */
 export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
-  const navigate = useNavigate();
   const refTitre = useRef<HTMLHeadingElement>(null);
   const refNouveau = useRef<HTMLButtonElement>(null);
   const refFeuilleOuverte = useRef(false);
@@ -220,14 +218,7 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
   return (
     <main className="mx-auto w-full max-w-[560px] px-5 pb-28 pt-6">
       <header className="mb-5 flex h-16 items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate("/profil")}
-          aria-label="Retour au profil"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border-0 bg-[var(--card)] text-[var(--foreground)] shadow-[var(--ombre-carte)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-        >
-          <ChevronLeft aria-hidden strokeWidth={2} className="h-[22px] w-[22px]" />
-        </button>
+        <BoutonRetour libelleAria="Retour au profil" />
         <h1
           ref={refTitre}
           tabIndex={-1}

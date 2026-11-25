@@ -102,7 +102,9 @@ export function AppRoutes() {
 
   return (
     <Routes>
-      <Route element={<MiseEnPage utilisateur={utilisateur} />}>
+      <Route
+        element={<MiseEnPage utilisateur={utilisateur} onSessionExpiree={gererDeconnexion} />}
+      >
         <Route
           path="/"
           element={
