@@ -867,7 +867,9 @@ describe("actions CSV et impression sur le détail de validation (US-030)", () =
     expect(lienRetour.className).toContain("print:hidden");
     expect(screen.getByText("Validée").className).toContain("print:text-black");
 
-    // Vignettes de justificatifs masquées (wrapper print:hidden autour de la vignette).
+    // Vignettes de justificatifs masquées (wrapper print:hidden autour de la vignette) :
+    // attendre que le chargement des photos soit terminé avant de contrôler le wrapper.
+    await screen.findAllByText("Aucune photo");
     const vignette = screen.getAllByText("Aucune photo")[0];
     let parentVignette: HTMLElement | null = vignette.parentElement;
     while (parentVignette !== null && !parentVignette.className.includes("print:hidden")) {
