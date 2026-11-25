@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import { Badge } from "../ui/badge";
 import type { NoteValidation, StatutValidation } from "../../api/client";
 import {
   formatDateCourteHorodatage,
@@ -16,10 +17,12 @@ const LIBELLES_STATUT: Record<StatutValidation, string> = {
 
 type Props = {
   note: NoteValidation;
+  /** Admin : affiche la pastille « À rembourser » sur les dossiers validés (US-035). */
+  estAdmin?: boolean;
 };
 
 /** Carte d'un dossier de la file de validation : demandeur, titre, date, total et statut. */
-export function CarteValidation({ note }: Props) {
+export function CarteValidation({ note, estAdmin = false }: Props) {
   const dateEnvoi =
     note.soumise_at === null ? "—" : formatDateCourteHorodatage(note.soumise_at);
 
@@ -41,15 +44,22 @@ export function CarteValidation({ note }: Props) {
               {note.proprietaire.display_name}
             </span>
           </div>
-          <span
-            className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold"
-            style={{
-              backgroundColor: `var(--statut-${note.statut}-fond)`,
-              color: `var(--statut-${note.statut}-texte)`,
-            }}
-          >
-            {LIBELLES_STATUT[note.statut]}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {estAdmin && note.statut === "validee" && (
+              <Badge className="min-h-11 px-3 text-[12px] font-semibold">
+                À rembourser
+              </Badge>
+            )}
+            <span
+              className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold"
+              style={{
+                backgroundColor: `var(--statut-${note.statut}-fond)`,
+                color: `var(--statut-${note.statut}-texte)`,
+              }}
+            >
+              {LIBELLES_STATUT[note.statut]}
+            </span>
+          </div>
         </div>
         <p className="m-0 line-clamp-2 min-w-0 break-words text-[17px] font-extrabold leading-tight">
           {note.libelle}
