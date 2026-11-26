@@ -12,11 +12,16 @@ from app.api import (
     users,
     validation,
 )
+from app.config import get_settings
+
+# En production, la documentation interactive et le schéma OpenAPI ne sont pas
+# servis (docs_url/openapi_url à None → 404) : réduction de la surface d'attaque.
+_docs_disabled = get_settings().environment == "production"
 
 app = FastAPI(
     title="Notes de frais",
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url=None if _docs_disabled else "/api/docs",
+    openapi_url=None if _docs_disabled else "/api/openapi.json",
     redoc_url=None,
 )
 
