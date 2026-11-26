@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bureau — Validation (maître-détail)</title>
+<style>
+:root{
+  --fond:#F3F4FF;
+  --carte:#FFFFFF;
+  --texte:#1A1A2E;
+  --texte2:#565A73;
+  --primaire:#5B3DF5;
+  --pale:#EDE9FF;
+  --pale-texte:#3A22B0;
+  --err-fond:#FFE4E6;
+  --err-texte:#9F1239;
+  --ombre:0 6px 18px rgba(40,30,120,.06);
+  --ombre-bouton:0 10px 24px rgba(91,61,245,.35);
+}
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+body{
+  margin:0;
+  background:var(--fond);
+  color:var(--texte);
+  font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:16px;
+  line-height:1.5;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+/* Barre latérale */
+.sidebar{
+  position:fixed;
+  top:0;
+  left:0;
+  width:280px;
+  height:100vh;
+  background:var(--carte);
+  border-right:1px solid rgba(0,0,0,0.05);
+  padding:24px 20px;
+  display:flex;
+  flex-direction:column;
+  gap:28px;
+}
+
+.sidebar-logo{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.sidebar-logo-icon{
+  width:46px;
+  height:46px;
+  border-radius:23px;
+  background:#FFD9C2;
+  color:#7A3410;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:16px;
+}
+
+.sidebar-nav{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.sidebar-nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px;
+  border-radius:18px;
+  color:var(--texte2);
+  font-weight:700;
+  font-size:15px;
+  transition:background 0.2s;
+}
+
+.sidebar-nav-item:hover{
+  background:rgba(91,61,245,0.08);
+}
+
+.sidebar-nav-item.active{
+  background:var(--pale);
+  color:var(--pale-texte);
+}
+
+.sidebar-nav-item .icon{
+  width:24px;
+  height:24px;
+  stroke-width:2;
+}
+
+.sidebar-validation-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  min-height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  font-size:11px;
+  font-weight:700;
+  position:absolute;
+  top:8px;
+  right:8px;
+}
+
+.sidebar-new-expense{
+  margin-top:auto;
+  padding:12px 16px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  border:0;
+  border-radius:18px;
+  font-weight:700;
+  font-size:15px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+
+/* Zone de contenu */
+.content{
+  margin-left:280px;
+  min-height:100vh;
+  padding:40px 40px 60px;
+  display:flex;
+  flex-direction:column;
+  gap:28px;
+}
+
+.content-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.content-title{
+  font-size:28px;
+  font-weight:800;
+  color:var(--texte);
+}
+
+.content-subtitle{
+  font-size:15px;
+  color:var(--texte2);
+}
+
+/* Maître-détail */
+.master-detail{
+  display:flex;
+  gap:40px;
+  flex:1;
+}
+
+.folders-list{
+  flex:0 0 320px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.folder-card{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  cursor:pointer;
+  transition:transform 0.2s,box-shadow 0.2s;
+}
+
+.folder-card:hover{
+  transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(40,30,120,.12);
+}
+
+.folder-card.selected{
+  border:2px solid var(--primaire);
+}
+
+.folder-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.folder-avatar{
+  width:40px;
+  height:40px;
+  border-radius:20px;
+  background:var(--pale);
+  color:var(--pale-texte);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:13px;
+  font-weight:800;
+}
+
+.folder-name{
+  flex:1;
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+}
+
+.folder-status{
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.folder-status.soumise{
+  background:#E4E7FF;
+  color:#3A22B0;
+}
+
+.folder-status.validee{
+  background:#DDF6E8;
+  color:#146C3C;
+}
+
+.folder-status.refusee{
+  background:#FFE4E6;
+  color:#9F1239;
+}
+
+.folder-status.remboursee{
+  background:#E0F2FE;
+  color:#075985;
+}
+
+.folder-title{
+  font-size:17px;
+  font-weight:800;
+  color:var(--texte);
+}
+
+.folder-meta{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+}
+
+.folder-date{
+  font-size:13px;
+  color:var(--texte2);
+}
+
+.folder-amount{
+  font-size:17px;
+  font-weight:800;
+  color:var(--texte);
+  font-variant-numeric:tabular-nums;
+}
+
+.detail-panel{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:24px;
+}
+
+.detail-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.detail-back{
+  width:44px;
+  height:44px;
+  border-radius:22px;
+  background:var(--fond);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.detail-title{
+  font-size:26px;
+  font-weight:800;
+  color:var(--texte);
+  flex:1;
+}
+
+.detail-status{
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:700;
+}
+
+.detail-total{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  padding:20px 24px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.detail-total-label{
+  font-size:14px;
+  color:var(--texte2);
+}
+
+.detail-total-amount{
+  font-size:34px;
+  font-weight:800;
+  color:var(--texte);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-0.03em;
+}
+
+.detail-expenses{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  padding:20px 24px;
+}
+
+.detail-expenses-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:16px;
+}
+
+.detail-expenses-title{
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+}
+
+.detail-expenses-count{
+  font-size:13px;
+  color:var(--texte2);
+}
+
+.expense-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 0;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+}
+
+.expense-item:last-child{
+  border-bottom:0;
+}
+
+.expense-category{
+  width:44px;
+  height:44px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+}
+
+.expense-category.transport{
+  background:#E4E7FF;
+  color:#3A22B0;
+}
+
+.expense-category.repas{
+  background:#FFE8D6;
+  color:#9A3F0B;
+}
+
+.expense-category.hebergement{
+  background:#EFEAFF;
+  color:#4A2FD6;
+}
+
+.expense-category.peage{
+  background:#DDF6E8;
+  color:#146C3C;
+}
+
+.expense-category.carburant{
+  background:#FFF1D6;
+  color:#7A4A00;
+}
+
+.expense-category.autre{
+  background:#F1F2F6;
+  color:#565A73;
+}
+
+.expense-info{
+  flex:1;
+  min-width:0;
+}
+
+.expense-title{
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+  margin-bottom:4px;
+}
+
+.expense-meta{
+  display:flex;
+  gap:12px;
+}
+
+.expense-date{
+  font-size:13px;
+  color:var(--texte2);
+}
+
+.expense-amount{
+  font-size:15px;
+  font-weight:800;
+  color:var(--texte);
+  font-variant-numeric:tabular-nums;
+}
+
+.detail-justificatifs{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  padding:20px 24px;
+}
+
+.detail-justificatifs-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:16px;
+}
+
+.detail-justificatifs-title{
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+}
+
+.detail-justificatifs-hint{
+  font-size:13px;
+  color:var(--texte2);
+}
+
+.justificatif-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+
+.justificatif-item{
+  aspect-ratio:92/112;
+  border-radius:16px;
+  background:#F3F4FF;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  position:relative;
+  overflow:hidden;
+}
+
+.justificatif-item img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.justificatif-item.no-image{
+  background:var(--fond);
+}
+
+.justificatif-item.no-image svg{
+  width:32px;
+  height:32px;
+  color:var(--texte2);
+}
+
+.detail-history{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  padding:20px 24px;
+}
+
+.detail-history-header{
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+  margin-bottom:16px;
+}
+
+.history-item{
+  padding:12px 0;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+}
+
+.history-item:last-child{
+  border-bottom:0;
+}
+
+.history-date{
+  font-size:13px;
+  color:var(--texte2);
+  margin-bottom:4px;
+}
+
+.history-action{
+  font-size:15px;
+  font-weight:600;
+  color:var(--texte);
+}
+
+.history-refusal{
+  background:var(--err-fond);
+  color:var(--err-texte);
+  padding:8px 12px;
+  border-radius:16px;
+  font-size:13px;
+  font-weight:600;
+  margin-top:8px;
+}
+
+/* Actions */
+.actions-bar{
+  background:var(--fond);
+  padding:12px 20px 28px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  border-top:1px solid rgba(0,0,0,0.05);
+}
+
+.btn-action{
+  height:56px;
+  border:0;
+  border-radius:18px;
+  font-weight:700;
+  font-size:15px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+
+.btn-refuser{
+  background:var(--carte);
+  color:var(--texte);
+}
+
+.btn-valider{
+  background:var(--primaire);
+  color:#FFFFFF;
+  box-shadow:var(--ombre-bouton);
+}
+
+.btn-rembourser{
+  background:var(--pale);
+  color:var(--pale-texte);
+}
+
+.btn-action:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+
+/* Responsive */
+@media (max-width:1023px){
+  .sidebar{
+    display:none;
+  }
+  
+  .content{
+    margin-left:0;
+    padding:20px 20px 88px;
+  }
+  
+  .master-detail{
+    flex-direction:column;
+  }
+  
+  .folders-list{
+    flex:0 0 auto;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-icon" aria-hidden="true">CM</div>
+    <div>
+      <h2 style="font-size:18px;font-weight:800;margin:0">Camille Moreau</h2>
+      <p style="font-size:13px;color:var(--texte2);margin:0">Comptable</p>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Navigation principale">
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-home"></use></svg>
+      Accueil
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-depenses"></use></svg>
+      Dépenses
+    </a>
+    <button class="sidebar-new-expense" aria-label="Nouvelle dépense">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Nouvelle dépense
+    </button>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-dossiers"></use></svg>
+      Dossiers
+    </a>
+    <a href="#" class="sidebar-nav-item active">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-validation"></use></svg>
+      Validation
+      <span class="sidebar-validation-badge">3</span>
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-profil"></use></svg>
+      Profil
+    </a>
+  </nav>
+</div>
+
+<div class="content">
+  <div class="content-header">
+    <div>
+      <h1 class="content-title">Validation</h1>
+      <p class="content-subtitle">3 dossiers en attente</p>
+    </div>
+  </div>
+
+  <div class="master-detail">
+    <!-- Liste des dossiers -->
+    <div class="folders-list">
+      <div class="folder-card selected" onclick="selectFolder(this)">
+        <div class="folder-header">
+          <div class="folder-avatar" aria-hidden="true">CM</div>
+          <div class="folder-name">Camille Moreau</div>
+          <span class="folder-status soumise">Soumise</span>
+        </div>
+        <h3 class="folder-title">Semaine 47</h3>
+        <div class="folder-meta">
+          <span class="folder-date">Envoyé le 21 nov.</span>
+          <span class="folder-amount">180,00 €</span>
+        </div>
+      </div>
+
+      <div class="folder-card" onclick="selectFolder(this)">
+        <div class="folder-header">
+          <div class="folder-avatar" aria-hidden="true">SB</div>
+          <div class="folder-name">Sofiane Benali</div>
+          <span class="folder-status soumise">Soumise</span>
+        </div>
+        <h3 class="folder-title">Déplacement Lille</h3>
+        <div class="folder-meta">
+          <span class="folder-date">Envoyé le 20 nov.</span>
+          <span class="folder-amount">96,40 €</span>
+        </div>
+      </div>
+
+      <div class="folder-card" onclick="selectFolder(this)">
+        <div class="folder-header">
+          <div class="folder-avatar" aria-hidden="true">LF</div>
+          <div class="folder-name">Léa Fontaine</div>
+          <span class="folder-status soumise">Soumise</span>
+        </div>
+        <h3 class="folder-title">Salon professionnel — Lyon</h3>
+        <div class="folder-meta">
+          <span class="folder-date">Envoyé le 19 nov.</span>
+          <span class="folder-amount">412,30 €</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panneau détail -->
+    <div class="detail-panel">
+      <div class="detail-header">
+        <div class="detail-back" onclick="goBack()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </div>
+        <h2 class="detail-title">Semaine 47</h2>
+        <span class="detail-status soumise">Soumise</span>
+      </div>
+
+      <div style="font-size:13px;color:var(--texte2);">
+        <p style="margin-bottom:4px;"><strong>Demandeur :</strong> Camille Moreau</p>
+        <p style="margin:0;">Envoyé le 21 nov. 2026 à 18:42</p>
+      </div>
+
+      <div class="detail-total">
+        <span class="detail-total-label">Total du dossier</span>
+        <span class="detail-total-amount">180,00 €</span>
+      </div>
+
+      <div class="detail-expenses">
+        <div class="detail-expenses-header">
+          <span class="detail-expenses-title">Dépenses</span>
+          <span class="detail-expenses-count">3 dépenses</span>
+        </div>
+        
+        <div class="expense-item">
+          <div class="expense-category repas">🍽</div>
+          <div class="expense-info">
+            <p class="expense-title">Déjeuner client</p>
+            <div class="expense-meta">
+              <span class="expense-date">18 nov.</span>
+              <span class="expense-amount">45,00 €</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="expense-item">
+          <div class="expense-category transport">🚗</div>
+          <div class="expense-info">
+            <p class="expense-title">Taxi aéroport</p>
+            <div class="expense-meta">
+              <span class="expense-date">18 nov.</span>
+              <span class="expense-amount">32,50 €</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="expense-item">
+          <div class="expense-category autre">📄</div>
+          <div class="expense-info">
+            <p class="expense-title">Fournitures bureau</p>
+            <div class="expense-meta">
+              <span class="expense-date">17 nov.</span>
+              <span class="expense-amount">102,50 €</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-justificatifs">
+        <div class="detail-justificatifs-header">
+          <span class="detail-justificatifs-title">Justificatifs</span>
+          <span class="detail-justificatifs-hint">Touchez une vignette pour l'agrandir.</span>
+        </div>
+        
+        <div class="justificatif-grid">
+          <div class="justificatif-item" onclick="showJustificatif('ticket-restaurant')">
+            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTIiIGhlaWdodD0iMTEyIiB2aWV3Qm94PSIwIDAgOTIgMTEyIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSI5MiIgaGVpZ2h0PSIxMTIiIGZpbGw9IiNGM0Y0RkYiIHJ4PSIxNiIvPjx0ZXh0IHg9IjQ2IiB5PSI2MCIgZmlsbD0iIzM5MzQxMCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5UaWNrZXQgUmVzdGF1cmFudDwvdGV4dD48L3N2Zz4=" alt="Ticket restaurant" />
+          </div>
+          <div class="justificatif-item" onclick="showJustificatif('facture-taxi')">
+            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTIiIGhlaWdodD0iMTEyIiB2aWV3Qm94PSIwIDAgOTIgMTEyIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSI5MiIgaGVpZ2h0PSIxMTIiIGZpbGw9IiNGM0Y0RkYiIHJ4PSIxNiIvPjx0ZXh0IHg9IjQ2IiB5PSI2MCIgZmlsbD0iIzM5MzQxMCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5GYWN0dXJlIFRheGk8L3RleHQ+PC9zdmc+" alt="Facture taxi" />
+          </div>
+          <div class="justificatif-item" onclick="showJustificatif('facture-bureau')">
+            <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTIiIGhlaWdodD0iMTEyIiB2aWV3Qm94PSIwIDAgOTIgMTEyIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSI5MiIgaGVpZ2h0PSIxMTIiIGZpbGw9IiNGM0Y0RkYiIHJ4PSIxNiIvPjx0ZXh0IHg9IjQ2IiB5PSI2MCIgZmlsbD0iIzM5MzQxMCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNjAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5GYWN0dXJlIEJvdXJ1PC90ZXh0Pjwvc3ZnPg==" alt="Facture bureau" />
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-history">
+        <h3 class="detail-history-header">Historique</h3>
+        <div class="history-item">
+          <p class="history-date">21 nov. 2026 à 18:42 · Camille Moreau</p>
+          <p class="history-action">Brouillon → Soumise</p>
+        </div>
+        <div class="history-item">
+          <p class="history-date">18 nov. 2026 à 09:12 · Camille Moreau</p>
+          <p class="history-action">Ajout dépense « Déjeuner client »</p>
+        </div>
+        <div class="history-item">
+          <p class="history-date">17 nov. 2026 à 16:30 · Camille Moreau</p>
+          <p class="history-action">Création du dossier</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="actions-bar">
+  <button class="btn-action btn-refuser" onclick="refuseFolder()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    Refuser
+  </button>
+  <button class="btn-action btn-valider" onclick="validateFolder()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    Valider
+  </button>
+</div>
+
+<script>
+function selectFolder(card) {
+  document.querySelectorAll('.folder-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+}
+
+function goBack() {
+  window.history.back();
+}
+
+function validateFolder() {
+  if (confirm('Valider ce dossier ?\nLe dossier passera au statut « Validée ». Camille Moreau sera notifiée de la décision.')) {
+    alert('Dossier validé avec succès !\nRetour à la liste des dossiers.');
+    // En situation réelle, recharger la liste
+  }
+}
+
+function refuseFolder() {
+  const motif = prompt('Motif du refus (obligatoire) :');
+  if (motif) {
+    alert(`Dossier refusé avec motif : "${motif}"\nCamille Moreau pourra corriger et renvoyer.`);
+    // En situation réelle, recharger la liste
+  }
+}
+
+function showJustificatif(name) {
+  alert(`Affichage du justificatif : ${name}`);
+}
+</script>
+
+</body>
+</html>

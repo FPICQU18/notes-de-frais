@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bureau — Comptes (admin)</title>
+<style>
+:root{
+  --fond:#F3F4FF;
+  --carte:#FFFFFF;
+  --texte:#1A1A2E;
+  --texte2:#565A73;
+  --primaire:#5B3DF5;
+  --pale:#EDE9FF;
+  --pale-texte:#3A22B0;
+  --err-fond:#FFE4E6;
+  --err-texte:#9F1239;
+  --ombre:0 6px 18px rgba(40,30,120,.06);
+  --ombre-bouton:0 10px 24px rgba(91,61,245,.35);
+}
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+body{
+  margin:0;
+  background:var(--fond);
+  color:var(--texte);
+  font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:16px;
+  line-height:1.5;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+/* Barre latérale */
+.sidebar{
+  position:fixed;
+  top:0;
+  left:0;
+  width:280px;
+  height:100vh;
+  background:var(--carte);
+  border-right:1px solid rgba(0,0,0,0.05);
+  padding:24px 20px;
+  display:flex;
+  flex-direction:column;
+  gap:28px;
+}
+
+.sidebar-logo{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.sidebar-logo-icon{
+  width:46px;
+  height:46px;
+  border-radius:23px;
+  background:#FFD9C2;
+  color:#7A3410;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:16px;
+}
+
+.sidebar-nav{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.sidebar-nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px;
+  border-radius:18px;
+  color:var(--texte2);
+  font-weight:700;
+  font-size:15px;
+  transition:background 0.2s;
+}
+
+.sidebar-nav-item:hover{
+  background:rgba(91,61,245,0.08);
+}
+
+.sidebar-nav-item.active{
+  background:var(--pale);
+  color:var(--pale-texte);
+}
+
+.sidebar-nav-item .icon{
+  width:24px;
+  height:24px;
+  stroke-width:2;
+}
+
+.sidebar-validation-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  min-height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  font-size:11px;
+  font-weight:700;
+  position:absolute;
+  top:8px;
+  right:8px;
+}
+
+.sidebar-new-expense{
+  margin-top:auto;
+  padding:12px 16px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  border:0;
+  border-radius:18px;
+  font-weight:700;
+  font-size:15px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+
+/* Zone de contenu */
+.content{
+  margin-left:280px;
+  min-height:100vh;
+  padding:40px 40px 60px;
+  display:flex;
+  flex-direction:column;
+  gap:28px;
+}
+
+.content-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.content-title{
+  font-size:28px;
+  font-weight:800;
+  color:var(--texte);
+}
+
+.content-subtitle{
+  font-size:15px;
+  color:var(--texte2);
+}
+
+/* Tableau */
+.table-container{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  overflow:hidden;
+}
+
+.table-header{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:20px 24px;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+}
+
+.table-title{
+  font-size:20px;
+  font-weight:800;
+  color:var(--texte);
+  flex:1;
+}
+
+.table-actions{
+  display:flex;
+  gap:12px;
+}
+
+.btn-primaire{
+  height:52px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  border:0;
+  border-radius:18px;
+  font-weight:700;
+  font-size:15px;
+  cursor:pointer;
+  padding:0 24px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.table-body{
+  display:flex;
+  flex-direction:column;
+}
+
+.table-row{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:18px 24px;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+  transition:background 0.2s;
+}
+
+.table-row:hover{
+  background:rgba(91,61,245,0.04);
+}
+
+.table-row:last-child{
+  border-bottom:0;
+}
+
+.table-cell{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:1;
+  min-width:0;
+}
+
+.table-cell-avatar{
+  width:40px;
+  height:40px;
+  border-radius:20px;
+  background:var(--pale);
+  color:var(--pale-texte);
+  display:flex;
+  align-items:center;
+  justify-content:content:
+  font-size:13px;
+  font-weight:800;
+}
+
+.table-cell-name{
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+  flex:1.5;
+  min-width:0;
+}
+
+.table-cell-email,
+.table-cell-role,
+.table-cell-status,
+.table-cell-created{
+  font-size:14px;
+  color:var(--texte2);
+}
+
+.table-cell-actions{
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+}
+
+.btn-action{
+  height:44px;
+  padding:0 16px;
+  border:0;
+  border-radius:16px;
+  font-weight:700;
+  font-size:13px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.btn-edit{
+  background:var(--fond);
+  color:var(--texte);
+}
+
+.btn-disable{
+  background:var(--err-fond);
+  color:var(--err-texte);
+}
+
+.btn-enable{
+  background:#DDF6E8;
+  color:#146C3C;
+}
+
+/* Responsive */
+@media (max-width:1023px){
+  .sidebar{
+    display:none;
+  }
+  
+  .content{
+    margin-left:0;
+    padding:20px 20px 88px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-icon" aria-hidden="true">CM</div>
+    <div>
+      <h2 style="font-size:18px;font-weight:800;margin:0">Camille Moreau</h2>
+      <p style="font-size:13px;color:var(--texte2);margin:0">Administrateur</p>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Navigation principale">
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-home"></use></svg>
+      Accueil
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-depenses"></use></svg>
+      Dépenses
+    </a>
+    <button class="sidebar-new-expense" aria-label="Nouvelle dépense">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Nouvelle dépense
+    </button>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-dossiers"></use></svg>
+      Dossiers
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-validation"></use></svg>
+      Validation
+      <span class="sidebar-validation-badge">3</span>
+    </a>
+    <a href="#" class="sidebar-nav-item active">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-profil"></use></svg>
+      Comptes
+    </a>
+  </nav>
+</div>
+
+<div class="content">
+  <div class="content-header">
+    <div>
+      <h1 class="content-title">Gestion des comptes</h1>
+      <p class="content-subtitle">5 comptes au total</p>
+    </div>
+    <button class="btn-primaire">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Nouveau compte
+    </button>
+  </div>
+
+  <div class="table-container">
+    <div class="table-header">
+      <h2 class="table-title">Tous les comptes</h2>
+      <div class="table-actions">
+        <span style="font-size:13px;color:var(--texte2);">5 résultats</span>
+      </div>
+    </div>
+    
+    <div class="table-body">
+      <div class="table-row">
+        <div class="table-cell">
+          <div class="table-cell-avatar" aria-hidden="true">CM</div>
+        </div>
+        <div class="table-cell table-cell-name">Camille Moreau</div>
+        <div class="table-cell table-cell-email">camille.moreau@exemple.fr</div>
+        <div class="table-cell table-cell-role">Administrateur</div>
+        <div class="table-cell table-cell-status">
+          <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#DDF6E8;color:#146C3C">Actif</span>
+        </div>
+        <div class="table-cell table-cell-created">20 nov. 2026</div>
+        <div class="table-cell table-cell-actions">
+          <button class="btn-action btn-edit" onclick="editAccount('cm')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Modifier
+          </button>
+        </div>
+      </div>
+
+      <div class="table-row">
+        <div class="table-cell">
+          <div class="table-cell-avatar" aria-hidden="true">SB</div>
+        </div>
+        <div class="table-cell table-cell-name">Sofiane Benali</div>
+        <div class="table-cell table-cell-email">sofiane.benali@exemple.fr</div>
+        <div class="table-cell table-cell-role">Valideur</div>
+        <div class="table-cell table-cell-status">
+          <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#DDF6E8;color:#146C3C">Actif</span>
+        </div>
+        <div class="table-cell table-cell-created">18 nov. 2026</div>
+        <div class="table-cell table-cell-actions">
+          <button class="btn-action btn-edit" onclick="editAccount('sb')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Modifier
+          </button>
+          <button class="btn-action btn-disable" onclick="disableAccount('sb')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"/></svg>
+            Désactiver
+          </button>
+        </div>
+      </div>
+
+      <div class="table-row">
+        <div class="table-cell">
+          <div class="table-cell-avatar" aria-hidden="true">LF</div>
+        </div>
+        <div class="table-cell table-cell-name">Léa Fontaine</div>
+        <div class="table-cell table-cell-email">lea.fontaine@exemple.fr</div>
+        <div class="table-cell table-cell-role">Utilisateur</div>
+        <div class="table-cell table-cell-status">
+          <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#DDF6E8;color:#146C3C">Actif</span>
+        </div>
+        <div class="table-cell table-cell-created">15 nov. 2026</div>
+        <div class="table-cell table-cell-actions">
+          <button class="btn-action btn-edit" onclick="editAccount('lf')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Modifier
+          </button>
+          <button class="btn-action btn-disable" onclick="disableAccount('lf')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"/></svg>
+            Désactiver
+          </button>
+        </div>
+      </div>
+
+      <div class="table-row">
+        <div class="table-cell">
+          <div class="table-cell-avatar" aria-hidden="true">JD</div>
+        </div>
+        <div class="table-cell table-cell-name">Julien Dupont</div>
+        <div class="table-cell table-cell-email">julien.dupont@exemple.fr</div>
+        <div class="table-cell table-cell-role">Valideur</div>
+        <div class="table-cell table-cell-status">
+          <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#F1F2F6;color:#565A73">Inactif</span>
+        </div>
+        <div class="table-cell table-cell-created">10 nov. 2026</div>
+        <div class="table-cell table-cell-actions">
+          <button class="btn-action btn-enable" onclick="enableAccount('jd')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Réactiver
+          </button>
+        </div>
+      </div>
+
+      <div class="table-row">
+        <div class="table-cell">
+          <div class="table-cell-avatar" aria-hidden="true">AM</div>
+        </div>
+        <div class="table-cell table-cell-name">Amélie Martin</div>
+        <div class="table-cell table-cell-email">amelie.martin@exemple.fr</div>
+        <div class="table-cell table-cell-role">Utilisateur</div>
+        <div class="table-cell table-cell-status">
+          <span style="padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#DDF6E8;color:#146C3C">Actif</span>
+        </div>
+        <div class="table-cell table-cell-created">5 nov. 2026</div>
+        <div class="table-cell table-cell-actions">
+          <button class="btn-action btn-edit" onclick="editAccount('am')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Modifier
+          </button>
+          <button class="btn-action btn-disable" onclick="disableAccount('am')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16"/></svg>
+            Désactiver
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function editAccount(id) {
+  alert(`Édition du compte : ${id}`);
+}
+
+function disableAccount(id) {
+  if (confirm('Désactiver ce compte ?\nLa personne ne pourra plus se connecter. Ses dossiers et dépenses sont conservés.')) {
+    alert(`Compte ${id} désactivé.`);
+  }
+}
+
+function enableAccount(id) {
+  if (confirm('Réactiver ce compte ?')) {
+    alert(`Compte ${id} réactivé.`);
+  }
+}
+</script>
+
+</body>
+</html>
