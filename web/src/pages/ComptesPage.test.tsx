@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router";
 
 import type { UserRead } from "../api/client";
@@ -106,6 +106,7 @@ function appels(fetchMock: ReturnType<typeof mockFetch>, urlPart: string, method
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   window.history.replaceState(null, "");
 });
 
@@ -182,8 +183,30 @@ test("rôle non admin sur /admin/comptes : redirigé vers /", async () => {
   expect(screen.queryByRole("heading", { name: "Comptes" })).not.toBeInTheDocument();
 });
 
-test("liste vide : « Aucun compte. » ; chargement : aria-busy + « Chargement… » ; erreur : alerte + « Réessayer »", async () => {
-  // Chargement : la promesse ne se résout pas tout de suite.
+test("liste vide : « Aucun compte. » ; chargement : aria-busy + « Chargement… » ; erreur 500 : alerte + « Réessayer » ; erreur 403 : alerte sans « Réessayer »", async () => {
+  // --- 403 (rôle insuffisant) : alerte avec le message du serveur, mais
+  // PAS de « Réessayer » (le serveur a refusé, ce n'est pas transitoire).
+  vi.spyOn(globalThis, "fetch").mockImplementation((entree) => {
+    if (String(entree).split("?")[0].endsWith("/api/v1/users")) {
+      return Promise.resolve(jsonResponse({ detail: "Accès interdit." }, 403));
+    }
+    return Promise.resolve(jsonResponse({ detail: "Introuvable" }, 404));
+  });
+  const { unmount } = render(
+    <MemoryRouter initialEntries={["/admin/comptes"]}>
+      <Routes>
+        <Route
+          path="/admin/comptes"
+          element={<ComptesPage utilisateur={ADMIN} onSessionExpiree={vi.fn()} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent("Accès interdit.");
+  expect(screen.queryByRole("button", { name: "Réessayer" })).not.toBeInTheDocument();
+  unmount();
+
+  // --- 500 : alerte + « Réessayer », puis succès sur liste vide.
   let resoudre!: (r: Response) => void;
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((entree) => {
     if (String(entree).split("?")[0].endsWith("/api/v1/users")) {
@@ -199,9 +222,8 @@ test("liste vide : « Aucun compte. » ; chargement : aria-busy + « Chargement�
   expect(section).toHaveAttribute("aria-busy", "true");
   expect(screen.getByText("Chargement…")).toBeInTheDocument();
 
-  // Erreur : alerte role="alert" + bouton « Réessayer ».
-  resoudre(jsonResponse({ detail: "Accès interdit." }, 403));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Accès interdit.");
+  resoudre(jsonResponse({ detail: "Erreur serveur." }, 500));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Erreur serveur.");
   const boutonReessayer = screen.getByRole("button", { name: "Réessayer" });
   expect(boutonReessayer).toBeInTheDocument();
 
@@ -563,4 +585,414 @@ test("401 sur un changement de rôle : onSessionExpiree appelé", async () => {
   await utilisateur.selectOptions(select, "valideur");
 
   await waitFor(() => expect(onSessionExpiree).toHaveBeenCalledTimes(1));
+});
+
+/* ------------------------------------- US-045 (tableau bureau ≥ 1024 px) */
+
+type EcouteurMedia = (evenement: MediaQueryListEvent) => void;
+
+/**
+ * Mock de `window.matchMedia` piloté par la largeur (même patron que
+ * `DossiersPage.test.tsx`, US-044) : `definirLargeur(px)` notifie les
+ * écouteurs comme au redimensionnement.
+ */
+function mockLargeur(largeurInitiale: number) {
+  let largeur = largeurInitiale;
+  const ecouteurs = new Set<EcouteurMedia>();
+  vi.stubGlobal("matchMedia", (requete: string) => {
+    const correspond = () =>
+      requete === "(min-width: 1024px)" ? largeur >= 1024 : false;
+    return {
+      get matches() {
+        return correspond();
+      },
+      media: requete,
+      addEventListener: (_: string, ecouteur: EcouteurMedia) => ecouteurs.add(ecouteur),
+      removeEventListener: (_: string, ecouteur: EcouteurMedia) => ecouteurs.delete(ecouteur),
+    } as unknown as MediaQueryList;
+  });
+  return {
+    definirLargeur(px: number) {
+      largeur = px;
+      const evenement = {
+        matches: px >= 1024,
+        media: "(min-width: 1024px)",
+      } as MediaQueryListEvent;
+      for (const ecouteur of ecouteurs) ecouteur(evenement);
+    },
+  };
+}
+
+function renderComptesBureau(options: { largeur?: number } = {}) {
+  mockLargeur(options.largeur ?? 1024);
+  return renderComptes();
+}
+
+/** Lignes du tableau (sans l'en-tête), dans l'ordre affiché. */
+function lignesTableau(): HTMLElement[] {
+  return screen.getAllByRole("row").slice(1);
+}
+
+describe("US-045 — tableau des comptes ≥ 1024 px", () => {
+  test("1023 px : la liste actuelle (cartes) reste affichée, aucun tableau", async () => {
+    mockFetch();
+    renderComptesBureau({ largeur: 1023 });
+
+    const items = await screen.findAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // Les sélecteurs de rôle de la liste mobile sont présents.
+    expect(screen.getByLabelText("Changer le rôle de Alice Admin")).toBeInTheDocument();
+  });
+
+  test("1024 px : tableau « Tous les comptes » avec les 6 colonnes, pastilles et bouton « Nouveau compte »", async () => {
+    mockFetch();
+    renderComptesBureau();
+
+    const tableau = await screen.findByRole("table", { name: "Tous les comptes" });
+    expect(tableau).toBeInTheDocument();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+
+    for (const colonne of ["Nom", "E-mail", "Rôle", "Statut", "Créé le", "Actions"]) {
+      expect(
+        within(screen.getAllByRole("row")[0]).getByRole("columnheader", {
+          name: new RegExp(`^${colonne}`),
+        }),
+      ).toBeInTheDocument();
+    }
+
+    // 3 lignes, dans l'ordre de l'API (aucun tri actif par défaut).
+    const lignes = lignesTableau();
+    expect(lignes).toHaveLength(3);
+    expect(lignes[0]).toHaveTextContent("Alice Admin");
+    expect(lignes[0]).toHaveTextContent("admin@example.com");
+    expect(lignes[1]).toHaveTextContent("Victor Valideur");
+    expect(lignes[2]).toHaveTextContent("Camille Martin");
+
+    // Pastilles de rôle et de statut identiques à la liste mobile.
+    expect(within(lignes[0]).getByText("Admin")).toBeInTheDocument();
+    expect(within(lignes[1]).getByText("Valideur")).toBeInTheDocument();
+    expect(within(lignes[2]).getByText("Utilisateur")).toBeInTheDocument();
+    expect(within(lignes[0]).getByText("Actif")).toBeInTheDocument();
+    expect(within(lignes[2]).getByText("Inactif")).toBeInTheDocument();
+
+    // Date de création formatée en français.
+    expect(within(lignes[0]).getByText("1 nov. 2026")).toBeInTheDocument();
+
+    // Actions : « Modifier » + « Désactiver » sur les comptes actifs,
+    // « Réactiver » sur le compte inactif ; aucune action sur son propre compte.
+    expect(within(lignes[0]).queryByRole("button", { name: "Modifier" })).not.toBeInTheDocument();
+    expect(within(lignes[1]).getByRole("button", { name: "Modifier" })).toBeInTheDocument();
+    expect(within(lignes[1]).getByRole("button", { name: "Désactiver" })).toBeInTheDocument();
+    expect(within(lignes[2]).getByRole("button", { name: "Réactiver" })).toBeInTheDocument();
+
+    // Le bouton « Nouveau compte » reste présent.
+    expect(screen.getByRole("button", { name: "Nouveau compte" })).toBeInTheDocument();
+  });
+
+  test("1024 px : clic sur « Modifier » d'une ligne ouvre la feuille d'édition (mêmes champs, sans mot de passe)", async () => {
+    mockFetch();
+    const utilisateur = userEvent.setup();
+    renderComptesBureau();
+
+    const lignes = await screen.findAllByRole("row");
+    // lignes[0] = en-tête ; lignes[1] = Alice (soi), lignes[2] = Victor, lignes[3] = Camille.
+    const ligneVictor = lignes[2];
+    await utilisateur.click(within(ligneVictor).getByRole("button", { name: "Modifier" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Modifier Victor Valideur" });
+    expect(within(dialog).getByLabelText("Nom affiché")).toHaveValue("Victor Valideur");
+    expect(within(dialog).getByLabelText("E-mail")).toHaveValue("victor@example.com");
+    expect((within(dialog).getByLabelText("Rôle") as HTMLSelectElement).value).toBe("valideur");
+    // Pas de champ mot de passe dans l'édition.
+    expect(within(dialog).queryByLabelText("Mot de passe initial")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Enregistrer" })).toBeInTheDocument();
+  });
+
+  test("1024 px : enregistrement de l'édition envoie un seul PATCH, ferme la feuille, recharge et annonce « Compte modifié. »", async () => {
+    // Compteur de GET : le premier renvoie la liste d'origine, le second
+    // (rechargement après édition) la liste mise à jour.
+    let nbGet = 0;
+    const fetchMock = mockFetch([
+      (url, methode) => {
+        if (url.endsWith("/api/v1/users/2") && methode === "PATCH") {
+          return jsonResponse({
+            id: 2,
+            email: "victor2@example.com",
+            display_name: "Victor V.",
+            role: "admin",
+            is_active: true,
+            created_at: "2026-11-02T10:00:00Z",
+          });
+        }
+        if (url.split("?")[0].endsWith("/api/v1/users") && methode === "GET") {
+          nbGet += 1;
+          if (nbGet > 1) {
+            return jsonResponse([
+              COMPTES[0],
+              { ...COMPTES[1], display_name: "Victor V.", email: "victor2@example.com", role: "admin" },
+              COMPTES[2],
+            ]);
+          }
+        }
+        return undefined;
+      },
+    ]);
+    const utilisateur = userEvent.setup();
+    renderComptesBureau();
+
+    const lignes = await screen.findAllByRole("row");
+    // lignes[0] = en-tête ; lignes[1] = Alice (soi, sans action), lignes[2] = Victor.
+    const ligneVictor = lignes[2];
+    await utilisateur.click(within(ligneVictor).getByRole("button", { name: "Modifier" }));
+    const dialog = await screen.findByRole("dialog", { name: "Modifier Victor Valideur" });
+    await utilisateur.clear(within(dialog).getByLabelText("Nom affiché"));
+    await utilisateur.type(within(dialog).getByLabelText("Nom affiché"), "Victor V.");
+    await utilisateur.clear(within(dialog).getByLabelText("E-mail"));
+    await utilisateur.type(within(dialog).getByLabelText("E-mail"), "victor2@example.com");
+    await utilisateur.selectOptions(within(dialog).getByLabelText("Rôle"), "admin");
+    await utilisateur.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(appels(fetchMock, "/api/v1/users/2", "PATCH")).toHaveLength(1),
+    );
+    const corps = JSON.parse(
+      (appels(fetchMock, "/api/v1/users/2", "PATCH")[0][1] as RequestInit).body as string,
+    );
+    expect(corps).toEqual({
+      display_name: "Victor V.",
+      email: "victor2@example.com",
+      role: "admin",
+    });
+    expect(corps).not.toHaveProperty("password");
+    await waitFor(() =>
+      expect(screen.getAllByRole("status").some((el) => el.textContent === "Compte modifié.")).toBe(true),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Liste rechargée : la ligne affiche le nouveau nom.
+    expect(await screen.findByText("Victor V.")).toBeInTheDocument();
+  });
+
+  test("1024 px : édition en 422 → messages rattachés aux champs ; en 403 → message du serveur dans la feuille", async () => {
+    const fetchMock = mockFetch([
+      (url, methode) => {
+        if (url.endsWith("/api/v1/users/2") && methode === "PATCH") {
+          return jsonResponse(
+            {
+              detail: [
+                { loc: ["body", "email"], msg: "Adresse e-mail invalide." },
+              ],
+            },
+            422,
+          );
+        }
+        return undefined;
+      },
+    ]);
+    const utilisateur = userEvent.setup();
+    renderComptesBureau();
+
+    const lignes = await screen.findAllByRole("row");
+    await utilisateur.click(within(lignes[2]).getByRole("button", { name: "Modifier" }));
+    let dialog = await screen.findByRole("dialog", { name: "Modifier Victor Valideur" });
+    await utilisateur.clear(within(dialog).getByLabelText("E-mail"));
+    await utilisateur.type(within(dialog).getByLabelText("E-mail"), "invalide");
+    await utilisateur.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+
+    const champEmail = within(dialog).getByLabelText("E-mail");
+    await waitFor(() =>
+      expect(within(dialog).getByText("Adresse e-mail invalide.")).toBeInTheDocument(),
+    );
+    expect(champEmail).toHaveAttribute("aria-invalid", "true");
+    expect(champEmail).toHaveAttribute(
+      "aria-describedby",
+      expect.stringContaining("erreur-edition-email"),
+    );
+    // La feuille reste ouverte, la saisie conservée.
+    expect(champEmail).toHaveValue("invalide");
+    expect(appels(fetchMock, "/api/v1/users/2", "PATCH")).toHaveLength(1);
+
+    // 403 : message du serveur affiché dans la feuille, liste inchangée.
+    fetchMock.mockImplementation((entree, init) => {
+      const url = String(entree);
+      const methode = init?.method ?? "GET";
+      if (url.endsWith("/api/v1/users/2") && methode === "PATCH") {
+        return Promise.resolve(
+          jsonResponse({ detail: "Vous ne pouvez pas modifier ce compte." }, 403),
+        );
+      }
+      if (url.split("?")[0].endsWith("/api/v1/users") && methode === "GET") {
+        return Promise.resolve(jsonResponse(COMPTES));
+      }
+      return Promise.resolve(jsonResponse({ detail: "Introuvable" }, 404));
+    });
+    await utilisateur.clear(within(dialog).getByLabelText("E-mail"));
+    await utilisateur.type(within(dialog).getByLabelText("E-mail"), "victor@example.com");
+    await utilisateur.click(within(dialog).getByRole("button", { name: "Enregistrer" }));
+
+    dialog = await screen.findByRole("dialog", { name: "Modifier Victor Valideur" });
+    const alerte = await within(dialog).findByRole("alert");
+    expect(alerte).toHaveTextContent("Vous ne pouvez pas modifier ce compte.");
+    expect(screen.getByText("Victor Valideur")).toBeInTheDocument();
+  });
+
+  test("1024 px : « Nouveau compte » toujours fonctionnel (création OK depuis le tableau)", async () => {
+    mockFetch([
+      (url, methode) => {
+        if (url.split("?")[0].endsWith("/api/v1/users") && methode === "POST") {
+          return jsonResponse(
+            {
+              id: 4,
+              email: "nouveau@example.com",
+              display_name: "Nouveau Compte",
+              role: "valideur",
+              is_active: true,
+              created_at: "2026-11-24T10:00:00Z",
+            },
+            201,
+          );
+        }
+        return undefined;
+      },
+    ]);
+    const utilisateur = userEvent.setup();
+    renderComptesBureau();
+
+    await screen.findByRole("table", { name: "Tous les comptes" });
+    await utilisateur.click(screen.getByRole("button", { name: "Nouveau compte" }));
+    const dialog = await screen.findByRole("dialog", { name: "Nouveau compte" });
+    await utilisateur.type(within(dialog).getByLabelText("Nom affiché"), "Nouveau Compte");
+    await utilisateur.type(within(dialog).getByLabelText("E-mail"), "nouveau@example.com");
+    await utilisateur.type(within(dialog).getByLabelText("Mot de passe initial"), "motdepasse12!");
+    await utilisateur.click(within(dialog).getByRole("button", { name: "Créer le compte" }));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("status").some((el) => el.textContent === "Compte créé.")).toBe(true),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("1024 px : « Désactiver » d'une ligne du tableau ouvre la même feuille de confirmation", async () => {
+    const fetchMock = mockFetch([
+      (url, methode) => {
+        if (url.endsWith("/api/v1/users/2/deactivate") && methode === "POST") {
+          return new Response(null, { status: 204 });
+        }
+        return undefined;
+      },
+    ]);
+    const utilisateur = userEvent.setup();
+    renderComptesBureau();
+
+    const lignes = await screen.findAllByRole("row");
+    await utilisateur.click(within(lignes[2]).getByRole("button", { name: "Désactiver" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Désactiver ce compte ?" });
+    expect(dialog).toHaveTextContent("Désactiver Victor Valideur ? Ses sessions seront fermées.");
+    await utilisateur.click(within(dialog).getByRole("button", { name: "Désactiver" }));
+
+    await waitFor(() =>
+      expect(appels(fetchMock, "/api/v1/users/2/deactivate", "POST")).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole("status").some((el) => el.textContent === "Compte désactivé.")).toBe(true),
+    );
+    await waitFor(() =>
+      expect(within(lignesTableau()[1]).getByText("Inactif")).toBeInTheDocument(),
+    );
+  });
+
+  test("1024 px : 403 (non-admin) au chargement → message du serveur sans « Réessayer » ; 401 → onSessionExpiree", async () => {
+    // 403 : alerte avec le message du serveur, PAS de bouton « Réessayer ».
+    vi.spyOn(globalThis, "fetch").mockImplementation((entree) => {
+      if (String(entree).split("?")[0].endsWith("/api/v1/users")) {
+        return Promise.resolve(jsonResponse({ detail: "Accès interdit." }, 403));
+      }
+      return Promise.resolve(jsonResponse({ detail: "Introuvable" }, 404));
+    });
+    renderComptesBureau();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Accès interdit.");
+    expect(screen.queryByRole("button", { name: "Réessayer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // Le bouton « Nouveau compte » reste présent.
+    expect(screen.getByRole("button", { name: "Nouveau compte" })).toBeInTheDocument();
+    vi.restoreAllMocks();
+
+    // 401 : onSessionExpiree appelé.
+    vi.spyOn(globalThis, "fetch").mockImplementation((entree) => {
+      if (String(entree).split("?")[0].endsWith("/api/v1/users")) {
+        return Promise.resolve(jsonResponse({ detail: "Authentification requise." }, 401));
+      }
+      return Promise.resolve(jsonResponse({ detail: "Introuvable" }, 404));
+    });
+    const onSessionExpiree = vi.fn();
+    renderComptes({ onSessionExpiree });
+    await waitFor(() => expect(onSessionExpiree).toHaveBeenCalledTimes(1));
+  });
+
+  test("1024 px : états conservés — chargement (aria-busy), liste vide « Aucun compte. » sans tableau", async () => {
+    let resoudre!: (r: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((entree) => {
+      if (String(entree).split("?")[0].endsWith("/api/v1/users")) {
+        return new Promise<Response>((res) => {
+          resoudre = res;
+        });
+      }
+      return Promise.resolve(jsonResponse({ detail: "Introuvable" }, 404));
+    });
+    renderComptesBureau();
+
+    const section = screen.getByRole("region", { name: "Comptes" });
+    expect(section).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Chargement…")).toBeInTheDocument();
+
+    fetchMock.mockImplementation((entree) => {
+      if (String(entree).split("?")[0].endsWith("/api/v1/users")) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      return Promise.resolve(jsonResponse({ detail: "Introuvable" }, 404));
+    });
+    resoudre(jsonResponse([]));
+    expect(await screen.findByText("Aucun compte.")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nouveau compte" })).toBeInTheDocument();
+  });
+
+  test("1024 px : le tri par nom fonctionne (clic sur l'en-tête « Nom » inverse l'ordre)", async () => {
+    mockFetch();
+    const utilisateur = userEvent.setup();
+    renderComptesBureau();
+
+    await screen.findByRole("table", { name: "Tous les comptes" });
+    // Ordre API : Alice, Victor, Camille.
+    expect(lignesTableau().map((l) => l.textContent)).toEqual([
+      expect.stringContaining("Alice Admin"),
+      expect.stringContaining("Victor Valideur"),
+      expect.stringContaining("Camille Martin"),
+    ]);
+
+    await utilisateur.click(screen.getByRole("columnheader", { name: /^Nom/ }).querySelector("button") as HTMLElement);
+    // Tri ascendant : Alice, Camille, Victor.
+    expect(lignesTableau().map((l) => l.textContent)).toEqual([
+      expect.stringContaining("Alice Admin"),
+      expect.stringContaining("Camille Martin"),
+      expect.stringContaining("Victor Valideur"),
+    ]);
+  });
+
+  test("redimensionnement : 1024 → 1023 px repasse en liste, 1023 → 1024 px repasse en tableau", async () => {
+    mockFetch();
+    const { definirLargeur } = mockLargeur(1024);
+    renderComptes();
+
+    await screen.findByRole("table", { name: "Tous les comptes" });
+    definirLargeur(1023);
+    expect(await screen.findAllByRole("listitem")).toHaveLength(3);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    definirLargeur(1024);
+    expect(await screen.findByRole("table", { name: "Tous les comptes" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  });
 });
