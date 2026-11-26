@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bureau — Dossiers</title>
+<style>
+:root{
+  --fond:#F3F4FF;
+  --carte:#FFFFFF;
+  --texte:#1A1A2E;
+  --texte2:#565A73;
+  --primaire:#5B3DF5;
+  --pale:#EDE9FF;
+  --pale-texte:#3A22B0;
+  --err-fond:#FFE4E6;
+  --err-texte:#9F1239;
+  --ombre:0 6px 18px rgba(40,30,120,.06);
+  --ombre-bouton:0 10px 24px rgba(91,61,245,.35);
+}
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
+body{
+  margin:0;
+  background:var(--fond);
+  color:var(--texte);
+  font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-size:16px;
+  line-height:1.5;
+}
+
+a{
+  color:inherit;
+  text-decoration:none;
+}
+
+/* Barre latérale */
+.sidebar{
+  position:fixed;
+  top:0;
+  left:0;
+  width:280px;
+  height:100vh;
+  background:var(--carte);
+  border-right:1px solid rgba(0,0,0,0.05);
+  padding:24px 20px;
+  display:flex;
+  flex-direction:column;
+  gap:28px;
+}
+
+.sidebar-logo{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.sidebar-logo-icon{
+  width:46px;
+  height:46px;
+  border-radius:23px;
+  background:#FFD9C2;
+  color:#7A3410;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:16px;
+}
+
+.sidebar-nav{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.sidebar-nav-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px;
+  border-radius:18px;
+  color:var(--texte2);
+  font-weight:700;
+  font-size:15px;
+  transition:background 0.2s;
+}
+
+.sidebar-nav-item:hover{
+  background:rgba(91,61,245,0.08);
+}
+
+.sidebar-nav-item.active{
+  background:var(--pale);
+  color:var(--pale-texte);
+}
+
+.sidebar-nav-item .icon{
+  width:24px;
+  height:24px;
+  stroke-width:2;
+}
+
+.sidebar-validation-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  min-height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  font-size:11px;
+  font-weight:700;
+  position:absolute;
+  top:8px;
+  right:8px;
+}
+
+.sidebar-new-expense{
+  margin-top:auto;
+  padding:12px 16px;
+  background:var(--primaire);
+  color:#FFFFFF;
+  border:0;
+  border-radius:18px;
+  font-weight:700;
+  font-size:15px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+
+/* Zone de contenu */
+.content{
+  margin-left:280px;
+  min-height:100vh;
+  padding:40px 40px 60px;
+  display:flex;
+  flex-direction:column;
+  gap:28px;
+}
+
+.content-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.content-title{
+  font-size:28px;
+  font-weight:800;
+  color:var(--texte);
+}
+
+.content-subtitle{
+  font-size:15px;
+  color:var(--texte2);
+}
+
+/* Tableau */
+.table-container{
+  background:var(--carte);
+  border-radius:24px;
+  box-shadow:var(--ombre);
+  overflow:hidden;
+}
+
+.table-header{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:20px 24px;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+}
+
+.table-title{
+  font-size:20px;
+  font-weight:800;
+  color:var(--texte);
+  flex:1;
+}
+
+.sort-icon{
+  width:16px;
+  height:16px;
+  color:var(--texte2);
+  cursor:pointer;
+  transition:transform 0.2s;
+}
+
+.sort-icon.asc{
+  transform:rotate(180deg);
+}
+
+.table-body{
+  display:flex;
+  flex-direction:column;
+}
+
+.table-row{
+  display:flex;
+  align-items:center;
+  gap:20px;
+  padding:18px 24px;
+  border-bottom:1px solid rgba(0,0,0,0.05);
+  cursor:pointer;
+  transition:background 0.2s;
+}
+
+.table-row:hover{
+  background:rgba(91,61,245,0.04);
+}
+
+.table-row:last-child{
+  border-bottom:0;
+}
+
+.table-cell{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:1;
+  min-width:0;
+}
+
+.table-cell-icon{
+  width:32px;
+  height:32px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+}
+
+.table-cell-icon.transport{
+  background:#E4E7FF;
+  color:#3A22B0;
+}
+
+.table-cell-icon.repas{
+  background:#FFE8D6;
+  color:#9A3F0B;
+}
+
+.table-cell-icon.hebergement{
+  background:#EFEAFF;
+  color:#4A2FD6;
+}
+
+.table-cell-icon.peage{
+  background:#DDF6E8;
+  color:#146C3C;
+}
+
+.table-cell-icon.carburant{
+  background:#FFF1D6;
+  color:#7A4A00;
+}
+
+.table-cell-icon.autre{
+  background:#F1F2F6;
+  color:#565A73;
+}
+
+.table-cell-date,
+.table-cell-categorie{
+  font-size:14px;
+  color:var(--texte2);
+  white-space:nowrap;
+}
+
+.table-cell-libelle{
+  font-size:15px;
+  font-weight:700;
+  color:var(--texte);
+  flex:2;
+  min-width:0;
+}
+
+.table-cell-montant{
+  font-size:15px;
+  font-weight:800;
+  color:var(--texte);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+
+.table-cell-statut{
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+
+.table-cell-statut.brouillon{
+  background:#FFF1D6;
+  color:#7A4A00;
+}
+
+.table-cell-statut.soumise{
+  background:#E4E7FF;
+  color:#3A22B0;
+}
+
+.table-cell-statut.validee{
+  background:#DDF6E8;
+  color:#146C3C;
+}
+
+.table-cell-statut.refusee{
+  background:#FFE4E6;
+  color:#9F1239;
+}
+
+.table-cell-statut.remboursee{
+  background:#E0F2FE;
+  color:#075985;
+}
+
+/* Responsive */
+@media (max-width:1023px){
+  .sidebar{
+    display:none;
+  }
+  
+  .content{
+    margin-left:0;
+    padding:20px 20px 88px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-icon" aria-hidden="true">CM</div>
+    <div>
+      <h2 style="font-size:18px;font-weight:800;margin:0">Camille Moreau</h2>
+      <p style="font-size:13px;color:var(--texte2);margin:0">Comptable</p>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Navigation principale">
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-home"></use></svg>
+      Accueil
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-depenses"></use></svg>
+      Dépenses
+    </a>
+    <button class="sidebar-new-expense" aria-label="Nouvelle dépense">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      Nouvelle dépense
+    </button>
+    <a href="#" class="sidebar-nav-item active">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-dossiers"></use></svg>
+      Dossiers
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-validation"></use></svg>
+      Validation
+      <span class="sidebar-validation-badge">3</span>
+    </a>
+    <a href="#" class="sidebar-nav-item">
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-profil"></use></svg>
+      Profil
+    </a>
+  </nav>
+</div>
+
+<div class="content">
+  <div class="content-header">
+    <div>
+      <h1 class="content-title">Dossiers</h1>
+      <p class="content-subtitle">12 dossiers au total</p>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div class="table-header">
+      <h2 class="table-title">Tous les dossiers</h2>
+      <span style="font-size:13px;color:var(--texte2);">12 résultats</span>
+    </div>
+    
+    <div class="table-body">
+      <div class="table-row" onclick="viewFolder('brouillon-001')">
+        <div class="table-cell">
+          <div class="table-cell-icon repas">🍽</div>
+          <span class="table-cell-date">26 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Fournitures de bureau</div>
+        <div class="table-cell table-cell-categorie">Repas</div>
+        <div class="table-cell table-cell-montant">125,50 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut brouillon">Brouillon</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('soumise-002')">
+        <div class="table-cell">
+          <div class="table-cell-icon transport">🚗</div>
+          <span class="table-cell-date">25 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Mission Lyon</div>
+        <div class="table-cell table-cell-categorie">Transport</div>
+        <div class="table-cell table-cell-montant">280,00 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut soumise">Soumise</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('validee-003')">
+        <div class="table-cell">
+          <div class="table-cell-icon hebergement">🏨</div>
+          <span class="table-cell-date">24 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Hébergement Bordeaux</div>
+        <div class="table-cell table-cell-categorie">Hébergement</div>
+        <div class="table-cell table-cell-montant">180,00 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut validee">Validée</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('refusee-004')">
+        <div class="table-cell">
+          <div class="table-cell-icon autre">📄</div>
+          <span class="table-cell-date">23 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Formation Excel</div>
+        <div class="table-cell table-cell-categorie">Autre</div>
+        <div class="table-cell table-cell-montant">450,00 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut refusee">Refusée</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('remboursee-005')">
+        <div class="table-cell">
+          <div class="table-cell-icon peage">🚗</div>
+          <span class="table-cell-date">22 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Déplacement Marseille</div>
+        <div class="table-cell table-cell-categorie">Péage</div>
+        <div class="table-cell table-cell-montant">85,20 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut remboursee">Remboursée</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('brouillon-006')">
+        <div class="table-cell">
+          <div class="table-cell-icon carburant">⛽</div>
+          <span class="table-cell-date">21 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Carburant novembre</div>
+        <div class="table-cell table-cell-categorie">Carburant</div>
+        <div class="table-cell table-cell-montant">156,80 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut brouillon">Brouillon</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('soumise-007')">
+        <div class="table-cell">
+          <div class="table-cell-icon repas">🍽</div>
+          <span class="table-cell-date">20 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Repas clients</div>
+        <div class="table-cell table-cell-categorie">Repas</div>
+        <div class="table-cell table-cell-montant">210,00 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut soumise">Soumise</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('validee-008')">
+        <div class="table-cell">
+          <div class="table-cell-icon transport">🚆</div>
+          <span class="table-cell-date">19 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Train Paris-Lyon</div>
+        <div class="table-cell table-cell-categorie">Transport</div>
+        <div class="table-cell table-cell-montant">79,00 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut validee">Validée</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('refusee-009')">
+        <div class="table-cell">
+          <div class="table-cell-icon autre">📄</div>
+          <span class="table-cell-date">18 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Logiciel CRM</div>
+        <div class="table-cell table-cell-categorie">Autre</div>
+        <div class="table-cell table-cell-montant">990,00 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut refusee">Refusée</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('remboursee-010')">
+        <div class="table-cell">
+          <div class="table-cell-icon hebergement">🏨</div>
+          <span class="table-cell-date">17 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Hôtel Lyon</div>
+        <div class="table-cell table-cell-categorie">Hébergement</div>
+        <div class="table-cell table-cell-montant">145,50 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut remboursee">Remboursée</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('brouillon-011')">
+        <div class="table-cell">
+          <div class="table-cell-icon carburant">⛽</div>
+          <span class="table-cell-date">16 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Carburant octobre</div>
+        <div class="table-cell table-cell-categorie">Carburant</div>
+        <div class="table-cell table-cell-montant">132,40 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut brouillon">Brouillon</span>
+        </div>
+      </div>
+
+      <div class="table-row" onclick="viewFolder('soumise-012')">
+        <div class="table-cell">
+          <div class="table-cell-icon peage">🚗</div>
+          <span class="table-cell-date">15 nov. 2026</span>
+        </div>
+        <div class="table-cell table-cell-libelle">Péages A10</div>
+        <div class="table-cell table-cell-categorie">Péage</div>
+        <div class="table-cell table-cell-montant">42,80 €</div>
+        <div class="table-cell">
+          <span class="table-cell-statut soumise">Soumise</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function viewFolder(id) {
+  alert(`Affichage du dossier : ${id}`);
+}
+
+// Tri par date (par défaut)
+let sortDirection = 'desc';
+
+function sortTable(column) {
+  const rows = Array.from(document.querySelectorAll('.table-row'));
+  
+  rows.sort((a, b) => {
+    const aValue = a.querySelector(`.table-cell-${column}`).textContent.trim();
+    const bValue = b.querySelector(`.table-cell-${column}`).textContent.trim();
+    
+    if (column === 'montant') {
+      const aNum = parseFloat(aValue.replace(/[^0-9.]/g, ''));
+      const bNum = parseFloat(bValue.replace(/[^0-9.]/g, ''));
+      return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+    }
+    
+    return sortDirection === 'asc' 
+      ? aValue.localeCompare(bValue) 
+      : bValue.localeCompare(aValue);
+  });
+  
+  const tbody = document.querySelector('.table-body');
+  tbody.innerHTML = '';
+  rows.forEach(row => tbody.appendChild(row));
+  
+  sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  document.querySelectorAll('.sort-icon').forEach(icon => icon.classList.remove('asc', 'desc'));
+  event.target.classList.add(sortDirection);
+}
+</script>
+
+</body>
+</html>
