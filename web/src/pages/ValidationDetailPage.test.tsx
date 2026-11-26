@@ -155,6 +155,28 @@ afterEach(() => {
 });
 
 describe("lecture du dossier", () => {
+  test("US-043 — la page détail mobile reste en variante « page » : h1, lien retour, pas de panneau maître-détail", async () => {
+    installerApi(
+      apiAvecJustificatifsParDefaut((url) => {
+        if (url === "/api/v1/validation/notes/1") return jsonResponse(note({ id: 1 }));
+        if (url === "/api/v1/notes/1/historique") return jsonResponse([transition({ id: 1 })]);
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }),
+    );
+
+    renderPage();
+
+    // Titre de niveau 1 (variante « page » du composant extrait) + bouton retour vers la file.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Semaine 47" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Retour à la validation" }),
+    ).toHaveAttribute("href", "/validation");
+    // Pas de section panneau (variante « panneau » du maître-détail bureau).
+    expect(screen.queryByLabelText("Détail du dossier sélectionné")).not.toBeInTheDocument();
+  });
+
   test("lance deux appels (détail + historique) et affiche demandeur, titre, statut, total, date d'envoi et nombre de dépenses", async () => {
     const fetchMock = installerApi(
       apiAvecJustificatifsParDefaut((url) => {
