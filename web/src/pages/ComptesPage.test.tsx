@@ -106,6 +106,7 @@ function appels(fetchMock: ReturnType<typeof mockFetch>, urlPart: string, method
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.history.replaceState(null, "");
 });
 
 /* ----------------------------------------------------------- liste */
@@ -113,6 +114,8 @@ afterEach(() => {
 test("bouton « Retour » présent en haut de la page Comptes, au clic retour à la page précédente (/profil)", async () => {
   mockFetch();
   const utilisateur = userEvent.setup();
+  // idx > 0 : une page précédente existe dans l'appli (cas navigate(-1)).
+  window.history.replaceState({ idx: 1 }, "");
   render(
     <MemoryRouter initialEntries={["/profil", "/admin/comptes"]} initialIndex={1}>
       <Routes>
