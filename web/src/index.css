@@ -247,6 +247,132 @@
   background: var(--primaire-fonce);
 }
 
+/* ============================================== barre latérale (US-042) */
+/* Masquée par défaut : affichée uniquement en ≥ 1024 px (voir media query
+   ci-dessous). Le libellé texte n'existe qu'en mode bureau. */
+.barre-laterale {
+  display: none;
+}
+
+.barre-navigation__lien .barre-laterale__texte {
+  display: none;
+}
+
+/* À partir de 1024 px (US-042) : barre latérale fixe à gauche, la barre
+   flottante du bas disparaît, le contenu occupe l'espace restant, centré
+   et limité à 1100 px. */
+@media (min-width: 1024px) {
+  .mise-en-page {
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  /* La barre latérale fixe occupe 280 px à gauche : le contenu est centré
+     dans l'espace restant et limité à 1100 px (US-042). */
+  .mise-en-page__contenu {
+    margin-left: 280px;
+    padding-inline: 2.5rem; /* 40 px, comme la maquette bureau (px-10) */
+    padding-bottom: var(--espace-7);
+  }
+
+  .mise-en-page__contenu > * {
+    width: 100%;
+    max-width: 1100px;
+    margin-inline: auto;
+  }
+
+  /* Les pages garder leur propre largeur mobile (26 rem) : en bureau, c'est
+     le conteneur ci-dessus qui limite à 1100 px. */
+  .mise-en-page__contenu .ecran,
+  .mise-en-page__contenu > main {
+    max-width: 1100px;
+  }
+
+  .barre-navigation {
+    display: none;
+  }
+
+  .barre-laterale {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    width: 280px;
+    height: 100vh;
+    padding: var(--espace-6) var(--espace-5);
+    background: var(--card);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: var(--ombre-navigation);
+  }
+
+  .barre-laterale__lien {
+    display: flex;
+    align-items: center;
+    gap: var(--espace-3);
+    min-height: var(--cible-min);
+    padding: var(--espace-3) var(--espace-4);
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+    font-weight: 700;
+    font-size: var(--taille-corps);
+    text-decoration: none;
+  }
+
+  .barre-laterale__lien:hover {
+    background: rgba(91, 61, 245, 0.08);
+  }
+
+  .barre-laterale__lien--actif {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .barre-laterale__texte {
+    display: inline;
+  }
+
+  .barre-laterale__lien-plus {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--espace-2);
+    min-height: var(--cible-min);
+    margin-bottom: var(--espace-4);
+    padding: var(--espace-3) var(--espace-4);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: var(--radius);
+    box-shadow: var(--ombre-bouton-flottant);
+    font-weight: 700;
+    font-size: var(--taille-corps);
+    text-decoration: none;
+  }
+
+  .barre-laterale__lien-plus:hover {
+    background: var(--primaire-fonce);
+  }
+}
+
+/* ============================================= formulaires bureau (US-042) */
+/* En ≥ 1024 px, les écrans de formulaire (connexion, saisie et modification
+   d'une dépense) restent dans une carte centrée de 640 px maximum. */
+@media (min-width: 1024px) {
+  .mise-en-page__contenu > .formulaire-depense {
+    max-width: 640px;
+    min-height: calc(100svh - 4rem);
+    margin-block: var(--espace-6);
+    border-radius: var(--rayon-carte);
+    box-shadow: var(--ombre-carte);
+  }
+
+  .carte-connexion {
+    max-width: 640px;
+  }
+}
+
 /* ========================================================== typographie */
 .marque {
   margin: 0 0 var(--espace-6);
@@ -445,7 +571,9 @@ a:focus-visible {
 }
 
 .barre-navigation__lien:focus-visible,
-.barre-navigation__lien-plus:focus-visible {
+.barre-navigation__lien-plus:focus-visible,
+.barre-laterale__lien:focus-visible,
+.barre-laterale__lien-plus:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
