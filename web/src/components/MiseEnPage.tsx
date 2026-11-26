@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { Check, Folder, Home, Plus, Receipt, User } from "lucide-react";
 
@@ -14,10 +14,15 @@ type Props = {
  * Nombre de dossiers à traiter (`statut=soumise`) affiché en pastille sur
  * l'onglet Validation. Comme la page Validation, on exclut les dossiers dont
  * l'utilisateur est propriétaire (il ne peut pas se valider lui-même) et la
- * pastille disparaît à zéro. Le compteur est rechargé à chaque navigation :
- * retour sur la liste après une décision, rechargement de l'appli.
+ * pastille disparaît à zéro. Le compteur est rechargé à chaque navigation,
+ * quand l'appli redevient visible (`visibilitychange`) et toutes les 60 s
+ * tant qu'elle est au premier plan (US-040) : retour sur la liste après une
+ * décision, rechargement de l'appli, soumission par un collègue pendant que
+ * l'onglet était en arrière-plan.
  * `null` = aucune pastille (rôle `utilisateur` ou chargement en cours).
  */
+const INTERVALLE_RAFRAICHISSEMENT_MS = 60_000;
+
 function useCompteurATraiter(
   utilisateur: UserRead | null,
   onSessionExpiree: () => void,
@@ -27,7 +32,7 @@ function useCompteurATraiter(
   const location = useLocation();
   const [compteur, setCompteur] = useState<number | null>(null);
 
-  useEffect(() => {
+  const chargerCompteur = useCallback(() => {
     if (!estValideur || utilisateur === null) return;
     let actif = true;
     apiGet<NoteValidation[]>("/v1/validation/notes?statut=soumise")
@@ -48,7 +53,27 @@ function useCompteurATraiter(
     return () => {
       actif = false;
     };
-  }, [estValideur, utilisateur, onSessionExpiree, location.key]);
+  }, [estValideur, utilisateur, onSessionExpiree]);
+
+  useEffect(() => {
+    if (!estValideur) return;
+    // (a) rechargement à chaque navigation.
+    const nettoyerNavigation = chargerCompteur();
+    // (b) rechargement quand l'appli redevient visible.
+    const auChangementVisibilite = () => {
+      if (document.visibilityState === "visible") chargerCompteur();
+    };
+    document.addEventListener("visibilitychange", auChangementVisibilite);
+    // (c) rafraîchissement périodique tant que l'onglet est au premier plan.
+    const intervalle = setInterval(() => {
+      if (document.visibilityState === "visible") chargerCompteur();
+    }, INTERVALLE_RAFRAICHISSEMENT_MS);
+    return () => {
+      nettoyerNavigation?.();
+      document.removeEventListener("visibilitychange", auChangementVisibilite);
+      clearInterval(intervalle);
+    };
+  }, [estValideur, chargerCompteur, location.key]);
 
   if (!estValideur) return null;
   return compteur;
