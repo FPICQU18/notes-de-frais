@@ -29,18 +29,31 @@ _TRUSTED_NETWORKS = tuple(
 
 
 def client_ip(request: Request) -> str | None:
-    """IP à utiliser pour le compteur : premier élément de X-Forwarded-For si la
-    source de la requête est un réseau de confiance, sinon l'IP du client.
+    """IP à utiliser pour le compteur : première adresse non fiable en partant de
+    la droite de X-Forwarded-For si la source de la requête est un réseau de
+    confiance, sinon l'IP directe du client.
 
-    Un client public ne peut donc pas se forger une IP via X-Forwarded-For.
+    Un client public ne peut donc pas se forger une IP via X-Forwarded-For
+    (en-tête ignoré). Derrière un proxy de confiance, le PREMIER élément de
+    X-Forwarded-For est fourni par le client et falsifiable : on parcourt donc
+    l'en-tête de DROITE à GAUCHE et on retient la première adresse valide qui
+    n'appartient à aucun réseau de confiance — celle que l'attaquant ne peut
+    pas modifier en tête de liste. Les valeurs invalides sont ignorées ; si
+    aucune valeur ne convient (ou en-tête absent/vide), on retombe sur l'IP
+    directe.
     """
     client_host = request.client.host if request.client is not None else None
     if client_host is not None and _is_trusted(client_host):
         forwarded_for = request.headers.get("x-forwarded-for")
         if forwarded_for:
-            first = forwarded_for.split(",")[0].strip()
-            if first:
-                return first
+            for value in reversed(forwarded_for.split(",")):
+                candidate = value.strip()
+                try:
+                    address = ipaddress.ip_address(candidate)
+                except ValueError:
+                    continue  # valeur invalide : ignorée, on continue vers la gauche
+                if not _is_trusted_address(address):
+                    return str(address)
     return client_host
 
 
@@ -49,6 +62,10 @@ def _is_trusted(host: str) -> bool:
         address = ipaddress.ip_address(host)
     except ValueError:
         return False
+    return _is_trusted_address(address)
+
+
+def _is_trusted_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return any(address in network for network in _TRUSTED_NETWORKS)
 
 
