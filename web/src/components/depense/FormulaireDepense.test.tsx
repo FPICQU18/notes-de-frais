@@ -1,0 +1,763 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { MemoryRouter } from "react-router";
+
+import type { Categorie } from "../../api/client";
+import { FormulaireDepense, type ValeurDepense } from "./FormulaireDepense";
+
+function jsonResponse(donnees: unknown, statut = 200): Response {
+  return new Response(JSON.stringify(donnees), {
+    status: statut,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+const MAINTENANT = new Date("2026-11-15T12:00:00Z");
+
+interface Options {
+  maintenant?: Date;
+  onSessionExpiree?: () => void;
+  onSucces?: (annonce: string | null) => void;
+  onConflit?: (message: string) => void;
+  onIntrouvable?: () => void;
+}
+
+function renderFormulaire(options: Options = {}) {
+  const onSessionExpiree = options.onSessionExpiree ?? vi.fn();
+  const onSucces = options.onSucces ?? vi.fn();
+  const utils = render(
+    <MemoryRouter>
+      <FormulaireDepense
+        mode="creation"
+        maintenant={options.maintenant ?? MAINTENANT}
+        onSessionExpiree={onSessionExpiree}
+        onSucces={onSucces}
+        onConflit={options.onConflit}
+        onIntrouvable={options.onIntrouvable}
+      />
+    </MemoryRouter>,
+  );
+  return { onSessionExpiree, onSucces, ...utils };
+}
+
+async function remplirFormulaireValide(utilisateur: ReturnType<typeof userEvent.setup>) {
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+}
+
+const VALEUR_INITIALE: ValeurDepense = {
+  libelle: "Déjeuner",
+  date_depense: "2026-11-15",
+  montant_centimes: 2450,
+  categorie: "repas",
+};
+
+function renderFormulaireModification(options: Options & { idDepense?: number } = {}) {
+  const onSessionExpiree = options.onSessionExpiree ?? vi.fn();
+  const onSucces = options.onSucces ?? vi.fn();
+  const utils = render(
+    <MemoryRouter>
+      <FormulaireDepense
+        mode="modification"
+        idDepense={options.idDepense ?? 1}
+        valeurInitiale={VALEUR_INITIALE}
+        maintenant={options.maintenant ?? MAINTENANT}
+        onSessionExpiree={onSessionExpiree}
+        onSucces={onSucces}
+        onConflit={options.onConflit}
+        onIntrouvable={options.onIntrouvable}
+      />
+    </MemoryRouter>,
+  );
+  return { onSessionExpiree, onSucces, ...utils };
+}
+
+beforeEach(() => {
+  URL.createObjectURL = vi.fn(() => "blob:apercu-ticket");
+  URL.revokeObjectURL = vi.fn();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+test("en-tête : bouton retour (aria-label « Retour ») et titre « Nouvelle dépense »", () => {
+  renderFormulaire();
+  expect(screen.getByRole("button", { name: "Retour" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { level: 1, name: "Nouvelle dépense" }),
+  ).toBeInTheDocument();
+});
+
+test("formulaire vierge : montant/libellé vides, date du jour à Paris, aucune catégorie", () => {
+  renderFormulaire({ maintenant: new Date("2026-11-23T23:30:00Z") });
+
+  // 23 h 30 UTC = 00 h 30 le 24 novembre à Paris (UTC+1) → pas la veille.
+  expect(screen.getByLabelText("Date")).toHaveValue("2026-11-24");
+  expect(screen.getByLabelText("Montant")).toHaveValue("");
+  expect(screen.getByLabelText("Libellé")).toHaveValue("");
+
+  const tuiles = screen.getAllByRole("button", { pressed: false });
+  expect(tuiles).toHaveLength(7);
+});
+
+test("champ montant : label « Montant », inputmode decimal, centré, tabular-nums, non grisé", () => {
+  renderFormulaire();
+  const champ = screen.getByLabelText("Montant");
+  expect(champ).toHaveAttribute("inputmode", "decimal");
+  expect(champ.className).toContain("text-center");
+  expect(champ.className).toContain("tabular-nums");
+  // Non grisé : pas de fond de champ ni d'opacité de désactivation.
+  expect(champ).toBeEnabled();
+  expect(champ.className).not.toContain("bg-[var(--secondary)]");
+  expect(champ.className).not.toContain("disabled:opacity");
+});
+
+test("champ montant : placeholder « 0,00 » et symbole « € » à côté du champ, pas dans l'input", () => {
+  renderFormulaire();
+  const champ = screen.getByLabelText("Montant");
+  expect(champ).toHaveAttribute("placeholder", "0,00");
+  expect(champ).not.toHaveValue(expect.stringContaining("€"));
+  // Le symbole € est un élément à côté de l'input, pas sa valeur ni son placeholder.
+  const conteneur = champ.parentElement as HTMLElement;
+  const symbole = within(conteneur).getByText("€");
+  expect(symbole).toHaveAttribute("aria-hidden", "true");
+  expect(symbole.tagName).toBe("SPAN");
+  expect(champ.getAttribute("placeholder")).not.toContain("€");
+});
+
+test("champ date : min-w-0 w-full appearance-none (pas de débordement iPhone), sans min-w forcée", () => {
+  renderFormulaire();
+  const champ = screen.getByLabelText("Date");
+  expect(champ.className).toContain("min-w-0");
+  expect(champ.className).toContain("w-full");
+  expect(champ.className).toContain("appearance-none");
+  expect(champ.className).not.toMatch(/min-w-\[\d+px\]/);
+});
+
+test("annulation : le bouton retour (« Retour ») revient en arrière sans aucun appel réseau", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.click(screen.getByRole("button", { name: "Retour" }));
+
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("bloc catégories : fieldset + legend, 7 tuiles dans l'ordre, aria-pressed", async () => {
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  const fieldset = screen.getByRole("group", { name: "Catégorie" });
+  const tuiles = within(fieldset).getAllByRole("button");
+  expect(tuiles.map((t) => t.textContent)).toEqual([
+    "Transport",
+    "Repas",
+    "Hébergement",
+    "Carburant",
+    "Péage/Parking",
+    "Fournitures",
+    "Autre",
+  ]);
+  for (const tuile of tuiles) {
+    expect(tuile).toHaveAttribute("aria-pressed", "false");
+  }
+
+  await utilisateur.click(within(fieldset).getByRole("button", { name: "Repas" }));
+  expect(within(fieldset).getByRole("button", { name: "Repas" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(within(fieldset).getByRole("button", { name: "Transport" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+});
+
+test("soumission valide : un seul POST, corps exact, montant « 24,50 » → 2450 centimes", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(jsonResponse({ id: 1 }, 201));
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(String(url)).toBe("/api/v1/depenses");
+  expect(init?.method).toBe("POST");
+  const corps = JSON.parse(String(init?.body));
+  expect(corps).toEqual({
+    libelle: "Déjeuner",
+    date_depense: "2026-11-15",
+    montant_centimes: 2450,
+    categorie: "repas",
+  });
+  expect(corps).not.toHaveProperty("commentaire");
+  expect(corps).not.toHaveProperty("note_id");
+  expect(corps).not.toHaveProperty("user_id");
+});
+
+test("soumission valide : « 24.50 » est aussi converti en 2450 centimes", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(jsonResponse({ id: 1 }, 201));
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24.50");
+  await utilisateur.click(screen.getByRole("button", { name: "Autre" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Café");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const corps = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+  expect(corps.montant_centimes).toBe(2450);
+});
+
+test.each(["", "0", "abc"])(
+  "montant « %s » → erreur et aucun appel réseau",
+  async (saisie) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const utilisateur = userEvent.setup();
+    renderFormulaire();
+
+    if (saisie !== "") {
+      await utilisateur.type(screen.getByLabelText("Montant"), saisie);
+    }
+    await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+    await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+    await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(
+      await screen.findByText("Saisissez un montant supérieur à 0 €."),
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
+test("montant supérieur à 100 000 € → erreur, aucun appel, saisie conservée", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "100000,01");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(
+    await screen.findByText("Le montant ne peut pas dépasser 100 000 €."),
+  ).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Montant")).toHaveValue("100000,01");
+});
+
+test("montant « 12,345 » (3 décimales) → refusé, aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "12,345");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(
+    await screen.findByText("Saisissez un montant avec deux décimales au maximum."),
+  ).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("date dans le futur → « La date ne peut pas être dans le futur. », aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ maintenant: new Date("2026-11-15T12:00:00Z") });
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-11-16" } });
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(
+    await screen.findByText("La date ne peut pas être dans le futur."),
+  ).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("aucune catégorie → « Choisissez une catégorie. », aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(await screen.findByText("Choisissez une catégorie.")).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("libellé vide → « Le libellé est requis. », aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(await screen.findByText("Le libellé est requis.")).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("libellé > 200 caractères → « Le libellé est trop long… », aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "a".repeat(201));
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(
+    await screen.findByText("Le libellé est trop long (200 caractères maximum)."),
+  ).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("double appui pendant l'envoi : un seul POST, bouton désactivé et aria-busy", async () => {
+  let resolvePost!: (r: Response) => void;
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+    () => new Promise<Response>((resoudre) => {
+      resolvePost = resoudre;
+    }),
+  );
+  const utilisateur = userEvent.setup();
+  const { onSucces } = renderFormulaire();
+
+  await remplirFormulaireValide(utilisateur);
+  const bouton = screen.getByRole("button", { name: "Enregistrer" });
+  await utilisateur.click(bouton);
+
+  const enCours = await screen.findByRole("button", { name: "Enregistrement…" });
+  expect(enCours).toBeDisabled();
+  expect(enCours).toHaveAttribute("aria-busy", "true");
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  await utilisateur.click(enCours).catch(() => {});
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  resolvePost(jsonResponse({ id: 1 }, 201));
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+});
+
+test("422 : messages détaillés par champ, valeurs conservées, bouton réactivé", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    jsonResponse(
+      {
+        detail: [
+          { loc: ["body", "libelle"], msg: "Libellé serveur invalide." },
+          { loc: ["body", "montant_centimes"], msg: "Montant serveur invalide." },
+        ],
+      },
+      422,
+    ),
+  );
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(await screen.findByText("Libellé serveur invalide.")).toBeInTheDocument();
+  expect(screen.getByText("Montant serveur invalide.")).toBeInTheDocument();
+
+  expect(screen.getByLabelText("Montant")).toHaveValue("24,50");
+  expect(screen.getByLabelText("Libellé")).toHaveValue("Déjeuner");
+  expect(screen.getByRole("button", { name: "Enregistrer" })).toBeEnabled();
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("panne réseau : alerte « Serveur injoignable… » puis « Réessayer » rejoue le POST", async () => {
+  let appels = 0;
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    appels += 1;
+    if (appels === 1) {
+      throw new Error("réseau");
+    }
+    return jsonResponse({ id: 1 }, 201);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Serveur injoignable. Vérifiez votre connexion.");
+  expect(screen.getByLabelText("Montant")).toHaveValue("24,50");
+
+  await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const corps1 = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+  const corps2 = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+  expect(corps2).toEqual(corps1);
+});
+
+test("401 → onSessionExpiree appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    jsonResponse({ detail: "Session expirée." }, 401),
+  );
+  const onSessionExpiree = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSessionExpiree });
+
+  await remplirFormulaireValide(utilisateur);
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+});
+
+test("la valeur de catégorie choisie est envoyée telle quelle", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(jsonResponse({ id: 1 }, 201));
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "8");
+  await utilisateur.click(screen.getByRole("button", { name: "Péage/Parking" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Parking");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const corps = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+    categorie: Categorie;
+    montant_centimes: number;
+  };
+  expect(corps.categorie).toBe("peage_parking");
+  expect(corps.montant_centimes).toBe(800);
+});
+
+test("libellé composé uniquement d'espaces → « Le libellé est requis. », aucun appel", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch");
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "24,50");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "   ");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  expect(await screen.findByText("Le libellé est requis.")).toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("montant exactement 100 000 € est accepté (10 000 000 centimes)", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(jsonResponse({ id: 1 }, 201));
+  const utilisateur = userEvent.setup();
+  renderFormulaire();
+
+  await utilisateur.type(screen.getByLabelText("Montant"), "100000");
+  await utilisateur.click(screen.getByRole("button", { name: "Repas" }));
+  await utilisateur.type(screen.getByLabelText("Libellé"), "Déjeuner");
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  const corps = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+  expect(corps.montant_centimes).toBe(10_000_000);
+});
+
+test("réponse 5xx : alerte avec le message de l'API puis « Réessayer » rejoue le POST", async () => {
+  let appels = 0;
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+    appels += 1;
+    if (appels === 1) {
+      return jsonResponse({ detail: "Erreur interne du serveur." }, 500);
+    }
+    return jsonResponse({ id: 1 }, 201);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Erreur interne du serveur.");
+  expect(screen.getByLabelText("Montant")).toHaveValue("24,50");
+
+  await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const corps1 = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+  const corps2 = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+  expect(corps2).toEqual(corps1);
+});
+
+test("création avec photo : POST puis PUT du justificatif, puis « Dépense enregistrée. »", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (entree, init) => {
+      const url = String(entree);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === "/api/v1/depenses" && method === "POST") {
+        return jsonResponse({ id: 42 }, 201);
+      }
+      if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+        return jsonResponse({ nom_fichier: "ticket.png" });
+      }
+      return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+    });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const [urlPost, initPost] = fetchMock.mock.calls[0];
+  expect(String(urlPost)).toBe("/api/v1/depenses");
+  expect(initPost?.method).toBe("POST");
+
+  const [urlPut, initPut] = fetchMock.mock.calls[1];
+  expect(String(urlPut)).toBe("/api/v1/depenses/42/justificatif");
+  expect(initPut?.method).toBe("PUT");
+  expect(initPut?.body).toBeInstanceOf(FormData);
+  expect((initPut?.body as FormData).get("fichier")).toBe(fichier);
+});
+
+test("création : PUT du justificatif échoue (422) → pas de recréation, « Réessayer » ne rejoue que le PUT", async () => {
+  let appelsPut = 0;
+  let appelsPost = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      appelsPost += 1;
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      appelsPut += 1;
+      if (appelsPut === 1) {
+        return jsonResponse(
+          { detail: "Format de justificatif non pris en charge (JPEG, PNG, HEIC ou PDF)." },
+          422,
+        );
+      }
+      return jsonResponse({ nom_fichier: "ticket.png" });
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent(
+    "Format de justificatif non pris en charge (JPEG, PNG, HEIC ou PDF).",
+  );
+  expect(onSucces).not.toHaveBeenCalled();
+  expect(appelsPost).toBe(1);
+
+  await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense enregistrée."));
+  expect(appelsPost).toBe(1);
+  expect(appelsPut).toBe(2);
+});
+
+test("modification : nouvelle photo, aucun champ modifié → pas de PATCH, PUT du justificatif", async () => {
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (entree, init) => {
+      const url = String(entree);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === "/api/v1/depenses/1/justificatif" && method === "GET") {
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }
+      if (url === "/api/v1/depenses/1/justificatif" && method === "PUT") {
+        return jsonResponse({ nom_fichier: "ticket.png" });
+      }
+      return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+    });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaireModification({ onSucces });
+
+  // Attendre la résolution du GET du justificatif (404 → « aucune photo jointe »).
+  expect(await screen.findByText("Aucune photo jointe")).toBeInTheDocument();
+
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  await waitFor(() => expect(onSucces).toHaveBeenCalledWith("Dépense modifiée."));
+
+  const methodes = fetchMock.mock.calls.map(([, init]) =>
+    (init?.method ?? "GET").toUpperCase(),
+  );
+  expect(methodes).not.toContain("PATCH");
+  expect(methodes).toContain("PUT");
+});
+
+test("création : PUT du justificatif répond 401 → session expirée, onSucces non appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      return jsonResponse({ detail: "Authentification requise." }, 401);
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onSessionExpiree = vi.fn();
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSessionExpiree, onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("création : PUT du justificatif répond 404 → onIntrouvable appelé, onSucces non appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      return jsonResponse({ detail: "Dépense introuvable." }, 404);
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onIntrouvable = vi.fn();
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onIntrouvable, onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  await waitFor(() => expect(onIntrouvable).toHaveBeenCalled());
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("modification : PUT du justificatif répond 409 → onConflit(message), onSucces non appelé", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses/1/justificatif" && method === "GET") {
+      return jsonResponse({ detail: "Introuvable" }, 404);
+    }
+    if (url === "/api/v1/depenses/1/justificatif" && method === "PUT") {
+      return jsonResponse(
+        { detail: "La dépense appartient à un dossier qui n'est pas au statut brouillon." },
+        409,
+      );
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onConflit = vi.fn();
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaireModification({ onConflit, onSucces });
+
+  expect(await screen.findByText("Aucune photo jointe")).toBeInTheDocument();
+
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(
+    screen.getByRole("button", { name: "Enregistrer les modifications" }),
+  );
+
+  await waitFor(() =>
+    expect(onConflit).toHaveBeenCalledWith(
+      "La dépense appartient à un dossier qui n'est pas au statut brouillon.",
+    ),
+  );
+  expect(onSucces).not.toHaveBeenCalled();
+});
+
+test("création : PUT du justificatif répond 413 → alerte « Le justificatif ne peut pas dépasser 10 Mo. », pas de recréation", async () => {
+  let appelsPost = 0;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const method = (init?.method ?? "GET").toUpperCase();
+    if (url === "/api/v1/depenses" && method === "POST") {
+      appelsPost += 1;
+      return jsonResponse({ id: 42 }, 201);
+    }
+    if (url === "/api/v1/depenses/42/justificatif" && method === "PUT") {
+      return jsonResponse({ detail: "Le justificatif ne peut pas dépasser 10 Mo." }, 413);
+    }
+    return jsonResponse({ detail: `inattendu ${method} ${url}` }, 500);
+  });
+  const onSucces = vi.fn();
+  const utilisateur = userEvent.setup();
+  renderFormulaire({ onSucces });
+
+  await remplirFormulaireValide(utilisateur);
+  const fichier = new File(["png"], "ticket.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Ajouter la photo du ticket"), {
+    target: { files: [fichier] },
+  });
+  await utilisateur.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+  const alerte = await screen.findByRole("alert");
+  expect(alerte).toHaveTextContent("Le justificatif ne peut pas dépasser 10 Mo.");
+  expect(onSucces).not.toHaveBeenCalled();
+  expect(appelsPost).toBe(1);
+});

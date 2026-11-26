@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · Comptes (administration)</title>
+<style>
+:root{--fond:#F3F4FF;--carte:#FFFFFF;--champ:#F3F4FF;--texte:#1A1A2E;--texte2:#565A73;--primaire:#5B3DF5;--pale:#EDE9FF;--pale-texte:#3A22B0;--err-fond:#FFE4E6;--err-texte:#9F1239;--ombre:0 6px 18px rgba(40,30,120,.06);--ombre-bouton:0 10px 24px rgba(91,61,245,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:#FFFFFF;color:var(--texte);font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}
+a{color:inherit;text-decoration:none}
+.titre-page{font-size:20px;font-weight:800;margin:24px 20px 4px}.note-page{font-size:13px;color:var(--texte2);margin:0 20px 10px;max-width:920px;line-height:1.5}
+.planche{display:flex;flex-wrap:wrap;gap:28px;padding:16px 20px 56px;align-items:flex-start}
+figure{margin:0}figcaption{width:390px;font-size:13px;font-weight:700;color:var(--texte2);margin-bottom:8px}
+.ecran{position:relative;width:390px;height:844px;background:var(--fond);overflow:hidden;box-shadow:var(--ombre)}
+.entete{height:64px;padding:0 12px;display:flex;align-items:center;gap:8px}
+.entete h2{font-size:17px;font-weight:800;margin:0;flex:1}.rond{width:44px;height:44px;border:0;border-radius:16px;background:var(--carte);color:var(--texte);display:flex;align-items:center;justify-content:center;flex:none}
+.zone{padding:4px 20px 0}
+.h{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}.mini{font-size:13px;color:var(--texte2);margin:0}
+.pastille{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}.role{background:var(--pale);color:var(--pale-texte)}.actif{background:#DDF6E8;color:#146C3C}.inactif{background:#F1F2F6;color:#565A73}
+.avatar{width:40px;height:40px;border-radius:20px;background:var(--pale);color:var(--pale-texte);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex:none}
+.carte{background:var(--carte);border-radius:22px;box-shadow:var(--ombre);padding:14px 16px;display:block}.liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.ligne{display:flex;align-items:center;gap:10px}.baseline{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:18px;font-family:inherit;font-size:15px;font-weight:700;height:52px;padding:0 18px}
+.btn-sm{height:44px;border-radius:16px;font-size:13px;padding:0 10px;white-space:nowrap;flex:1}
+.btn-primaire{background:var(--primaire);color:#FFFFFF;box-shadow:var(--ombre-bouton)}.btn-secondaire{background:var(--carte);color:var(--texte)}.btn-champ{background:var(--champ);color:var(--texte)}
+.btn-danger{background:var(--err-texte);color:#FFFFFF}
+.voile{position:absolute;inset:0;background:rgba(26,26,46,.45)}.feuille{position:absolute;left:0;right:0;bottom:0;background:#FFFFFF;border-radius:26px 26px 0 0;padding:22px 20px 28px;box-shadow:0 -10px 30px rgba(40,30,120,.12)}
+.feuille h2{font-size:20px;font-weight:800;margin:0 0 8px}
+label{display:block;font-size:13px;font-weight:700;color:var(--texte2);margin:14px 0 6px}
+.champ{width:100%;height:52px;border:0;border-radius:18px;background:var(--champ);padding:0 16px;font-family:inherit;font-size:15px;color:var(--texte)}
+.champ[aria-invalid="true"]{outline:2px solid var(--err-texte)}
+.erreur{font-size:13px;font-weight:600;color:var(--err-texte);margin:6px 0 0}
+.choix{display:flex;gap:8px}.choix button{flex:1;height:44px;border:0;border-radius:16px;background:var(--champ);color:var(--texte);font-family:inherit;font-size:13px;font-weight:700}
+.choix button[aria-checked="true"]{background:var(--primaire);color:#FFFFFF}
+.radio{display:flex;align-items:center;gap:12px;min-height:52px;background:var(--champ);border-radius:16px;padding:0 14px;font-size:15px;font-weight:600;margin-bottom:8px}
+.radio span.point{width:20px;height:20px;border-radius:999px;background:#FFFFFF;box-shadow:inset 0 0 0 2px var(--texte2);flex:none}
+.radio[aria-checked="true"] span.point{box-shadow:inset 0 0 0 6px var(--primaire)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.actions .btn{font-size:13px;padding:0 8px;white-space:nowrap}
+</style>
+</head>
+<body>
+<h1 class="titre-page">Comptes — administration (390 × 844)</h1>
+<p class="note-page">Écran réservé au rôle <code>admin</code>. Une carte par compte (nom, e-mail, rôle, état), cibles ≥ 44 px, bouton « Nouveau compte » en primaire, feuilles basses pour créer, changer le rôle et désactiver. Une seule action destructive par compte, désactivée pour son propre compte.</p>
+<div class="planche">
+
+<figure>
+<figcaption>1 · Liste des comptes — 4 comptes, un inactif</figcaption>
+<div class="ecran">
+  <header class="entete">
+    <button type="button" class="rond" aria-label="Retour au profil"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h2>Comptes</h2>
+  </header>
+  <div class="zone">
+    <button type="button" class="btn btn-primaire" style="width:100%;height:56px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Nouveau compte</button>
+    <ul class="liste" style="margin-top:16px">
+      <li class="carte">
+        <div class="baseline"><div class="ligne"><span class="avatar" aria-hidden="true">CM</span><div><p style="margin:0;font-size:15px;font-weight:700">Camille Moreau</p><p class="mini" style="margin-top:2px">camille.moreau@exemple.fr</p></div></div><span class="pastille actif">Actif</span></div>
+        <div class="baseline" style="margin-top:10px"><span class="pastille role">Administrateur</span><span class="mini">Votre compte</span></div>
+      </li>
+      <li class="carte">
+        <div class="baseline"><div class="ligne"><span class="avatar" aria-hidden="true">SB</span><div><p style="margin:0;font-size:15px;font-weight:700">Sofiane Benali</p><p class="mini" style="margin-top:2px">sofiane.benali@exemple.fr</p></div></div><span class="pastille actif">Actif</span></div>
+        <div class="baseline" style="margin-top:10px"><span class="pastille role">Valideur</span><span class="mini"></span></div>
+        <div class="ligne" style="margin-top:10px;gap:8px"><button type="button" class="btn btn-sm btn-champ">Changer le rôle</button><button type="button" class="btn btn-sm btn-champ">Désactiver</button></div>
+      </li>
+      <li class="carte">
+        <div class="baseline"><div class="ligne"><span class="avatar" aria-hidden="true">LF</span><div><p style="margin:0;font-size:15px;font-weight:700">Léa Fontaine</p><p class="mini" style="margin-top:2px">lea.fontaine@exemple.fr</p></div></div><span class="pastille actif">Actif</span></div>
+        <div class="baseline" style="margin-top:10px"><span class="pastille role">Utilisateur</span><span class="mini"></span></div>
+        <div class="ligne" style="margin-top:10px;gap:8px"><button type="button" class="btn btn-sm btn-champ">Changer le rôle</button><button type="button" class="btn btn-sm btn-champ">Désactiver</button></div>
+      </li>
+      <li class="carte">
+        <div class="baseline"><div class="ligne"><span class="avatar" aria-hidden="true">HP</span><div><p style="margin:0;font-size:15px;font-weight:700">Hugo Petit</p><p class="mini" style="margin-top:2px">hugo.petit@exemple.fr</p></div></div><span class="pastille inactif">Inactif</span></div>
+        <div class="baseline" style="margin-top:10px"><span class="pastille role">Utilisateur</span><span class="mini"></span></div>
+        <div class="ligne" style="margin-top:10px;gap:8px"><button type="button" class="btn btn-sm btn-champ">Changer le rôle</button><button type="button" class="btn btn-sm btn-champ">Réactiver</button></div>
+      </li>
+    </ul>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>2 · Feuille « Nouveau compte » — champs vides</figcaption>
+<div class="ecran">
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-nouveau">
+    <h2 id="titre-nouveau">Nouveau compte</h2>
+    <p class="mini" style="font-size:14px;line-height:1.5">Le compte est créé actif. La personne devra changer son mot de passe à la première connexion.</p>
+    <label for="nom">Nom affiché</label><input id="nom" class="champ" type="text" autocomplete="name">
+    <label for="email">E-mail</label><input id="email" class="champ" type="email" autocomplete="off">
+    <label id="etiquette-role">Rôle</label>
+    <div class="choix" role="radiogroup" aria-labelledby="etiquette-role"><button type="button" role="radio" aria-checked="false">Utilisateur</button><button type="button" role="radio" aria-checked="true">Valideur</button><button type="button" role="radio" aria-checked="false">Administrateur</button></div>
+    <label for="mdp">Mot de passe initial</label><input id="mdp" class="champ" type="password" aria-describedby="aide-mdp" autocomplete="new-password">
+    <p class="mini" id="aide-mdp" style="font-size:12px;margin-top:6px">Au moins 12 caractères.</p>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-primaire">Créer le compte</button></div>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>3 · Feuille « Changer le rôle » — sélection unique</figcaption>
+<div class="ecran">
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-role">
+    <h2 id="titre-role">Changer le rôle</h2>
+    <p class="mini" style="font-size:14px;line-height:1.5">Hugo Petit · hugo.petit@exemple.fr</p>
+    <div role="radiogroup" aria-labelledby="etiquette-roles" style="margin-top:14px">
+      <p id="etiquette-roles" class="mini" style="font-size:13px;font-weight:700;margin-bottom:8px">Nouveau rôle</p>
+      <div class="radio" role="radio" aria-checked="true" tabindex="0"><span class="point" aria-hidden="true"></span>Utilisateur</div>
+      <div class="radio" role="radio" aria-checked="false" tabindex="-1"><span class="point" aria-hidden="true"></span>Valideur</div>
+      <div class="radio" role="radio" aria-checked="false" tabindex="-1"><span class="point" aria-hidden="true"></span>Administrateur</div>
+    </div>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-primaire">Enregistrer</button></div>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>4 · Feuille — confirmation de désactivation (action destructive)</figcaption>
+<div class="ecran">
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-desactiver">
+    <h2 id="titre-desactiver">Désactiver ce compte ?</h2>
+    <p class="mini" style="font-size:14px;line-height:1.5">Léa Fontaine ne pourra plus se connecter. Ses dossiers et ses dépenses sont conservés.</p>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-danger">Désactiver le compte</button></div>
+  </div>
+</div>
+</figure>
+
+<figure>
+<figcaption>5 · Feuille « Nouveau compte » — erreurs de validation</figcaption>
+<div class="ecran">
+  <div class="voile"></div>
+  <div class="feuille" role="dialog" aria-modal="true" aria-labelledby="titre-nouveau-erreur">
+    <h2 id="titre-nouveau-erreur">Nouveau compte</h2>
+    <label for="nom-e">Nom affiché</label><input id="nom-e" class="champ" type="text" value="Sofiane Benali">
+    <label for="email-e">E-mail</label><input id="email-e" class="champ" type="email" value="sofiane.benali@exemple.fr" aria-invalid="true" aria-describedby="err-email">
+    <p class="erreur" id="err-email" role="alert">Cette adresse e-mail est déjà utilisée.</p>
+    <label id="etiquette-role-e">Rôle</label>
+    <div class="choix" role="radiogroup" aria-labelledby="etiquette-role-e"><button type="button" role="radio" aria-checked="false">Utilisateur</button><button type="button" role="radio" aria-checked="true">Valideur</button><button type="button" role="radio" aria-checked="false">Administrateur</button></div>
+    <label for="mdp-e">Mot de passe initial</label><input id="mdp-e" class="champ" type="password" value="court" aria-invalid="true" aria-describedby="err-mdp">
+    <p class="erreur" id="err-mdp" role="alert">Le mot de passe doit contenir au moins 12 caractères.</p>
+    <div class="actions"><button type="button" class="btn btn-secondaire">Annuler</button><button type="button" class="btn btn-primaire">Créer le compte</button></div>
+  </div>
+</div>
+</figure>
+
+</div>
+</body>
+</html>
