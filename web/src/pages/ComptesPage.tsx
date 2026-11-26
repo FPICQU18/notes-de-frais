@@ -7,7 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, UserCheck, UserX } from "lucide-react";
 import {
   ApiError,
   apiPatch,
@@ -15,9 +15,11 @@ import {
   erreursDeDetail,
   type UserRead,
 } from "../api/client";
-import { initiales } from "../lib/format";
+import { formatDateAnnee, initiales } from "../lib/format";
 import { useApiGet } from "../lib/useApiGet";
+import { useBureau } from "../lib/useMediaQuery";
 import { BoutonRetour } from "../components/BoutonRetour";
+import { TableauTriable, type ColonneTableau } from "../components/TableauTriable";
 
 /** Compte renvoyé par `GET /api/v1/users` (admin seulement, tri `id` croissant). */
 export interface CompteRead {
@@ -56,9 +58,183 @@ type CorpsCreation = {
   password: string;
 };
 
+/** Corps du PATCH d'édition (US-045) : nom, e-mail, rôle (mot de passe exclu). */
+type CorpsEdition = {
+  email: string;
+  display_name: string;
+  role: string;
+};
+
 type ResultatCreation =
   | { ok: true }
   | { ok: false; status: number; message: string; detail: unknown };
+
+type ResultatEdition = ResultatCreation;
+
+/** Pastille de statut du tableau bureau (mêmes couleurs que la liste mobile). */
+function pastilleStatut(compte: CompteRead): string {
+  return compte.is_active
+    ? "bg-[var(--statut-validee-fond)] text-[var(--statut-validee-texte)]"
+    : "bg-[var(--border)] text-[var(--muted-foreground)]";
+}
+
+/** Pastille de rôle du tableau bureau (même style que la liste mobile). */
+const CLS_PASTILLE_ROLE =
+  "inline-flex h-6 items-center whitespace-nowrap rounded-full bg-[var(--accent)] px-2.5 text-[12px] font-bold text-[var(--accent-foreground)]";
+
+type PropsTableau = {
+  compte: CompteRead;
+  estMoi: boolean;
+  busy: boolean;
+  onModifier: () => void;
+  onDesactiver: () => void;
+  onReactiver: () => void;
+};
+
+/**
+ * Cellule « actions » du tableau bureau (US-045) : « Modifier » ouvre la
+ * feuille d'édition, « Désactiver »/« Réactiver » selon l'état (mêmes
+ * comportements et erreurs que la liste mobile). Le compte de l'admin
+ * connecté n'expose aucune action (comme la maquette).
+ */
+function CelluleActions({
+  compte,
+  estMoi,
+  busy,
+  onModifier,
+  onDesactiver,
+  onReactiver,
+}: PropsTableau) {
+  if (estMoi) {
+    return <span className="text-[13px] font-semibold text-[var(--muted-foreground)]">—</span>;
+  }
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={onModifier}
+        disabled={busy}
+        className="flex h-11 items-center gap-1.5 rounded-[16px] bg-[var(--secondary)] px-4 text-[13px] font-bold whitespace-nowrap text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:text-[var(--muted-foreground)]"
+      >
+        <Pencil aria-hidden strokeWidth={2} className="h-4 w-4" />
+        Modifier
+      </button>
+      {compte.is_active ? (
+        <button
+          type="button"
+          onClick={onDesactiver}
+          disabled={busy}
+          className="flex h-11 items-center gap-1.5 rounded-[16px] bg-[var(--erreur-fond)] px-4 text-[13px] font-bold whitespace-nowrap text-[var(--erreur-texte)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <UserX aria-hidden strokeWidth={2} className="h-4 w-4" />
+          Désactiver
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onReactiver}
+          disabled={busy}
+          className="flex h-11 items-center gap-1.5 rounded-[16px] bg-[var(--statut-validee-fond)] px-4 text-[13px] font-bold whitespace-nowrap text-[var(--statut-validee-texte)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <UserCheck aria-hidden strokeWidth={2} className="h-4 w-4" />
+          Réactiver
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Colonnes du tableau bureau des comptes (US-045), dans l'ordre de la
+ * maquette `bureau-comptes.html` : nom, e-mail, rôle, statut, date de
+ * création, actions. Le rôle et le statut ne sont pas triables (la maquette
+ * n'a pas d'en-tête cliquable) ; nom, e-mail et date le sont.
+ */
+function colonnesComptes(actions: {
+  onModifier: (compte: CompteRead) => void;
+  onDesactiver: (compte: CompteRead) => void;
+  onReactiver: (compte: CompteRead) => void;
+  estMoi: (compte: CompteRead) => boolean;
+  busy: (compte: CompteRead) => boolean;
+}): ColonneTableau<CompteRead>[] {
+  return [
+    {
+      cle: "nom",
+      libelle: "Nom",
+      triable: true,
+      classe: "min-w-[180px]",
+      valeurTri: (compte) => compte.display_name,
+      cellule: (compte) => (
+        <span className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[20px] bg-[var(--accent)] text-[13px] font-extrabold text-[var(--accent-foreground)]"
+          >
+            {initiales(compte.display_name)}
+          </span>
+          <span className="block truncate text-[15px] font-bold">{compte.display_name}</span>
+        </span>
+      ),
+    },
+    {
+      cle: "email",
+      libelle: "E-mail",
+      triable: true,
+      classe: "min-w-[200px]",
+      valeurTri: (compte) => compte.email,
+      cellule: (compte) => (
+        <span className="block truncate text-[14px] text-[var(--muted-foreground)]">
+          {compte.email}
+        </span>
+      ),
+    },
+    {
+      cle: "role",
+      libelle: "Rôle",
+      classe: "w-[130px]",
+      cellule: (compte) => <span className={CLS_PASTILLE_ROLE}>{libelleRole(compte.role)}</span>,
+    },
+    {
+      cle: "statut",
+      libelle: "Statut",
+      classe: "w-[110px]",
+      cellule: (compte) => (
+        <span
+          className={`inline-flex h-6 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-bold ${pastilleStatut(compte)}`}
+        >
+          {compte.is_active ? "Actif" : "Inactif"}
+        </span>
+      ),
+    },
+    {
+      cle: "created_at",
+      libelle: "Créé le",
+      triable: true,
+      classe: "w-[130px]",
+      valeurTri: (compte) => compte.created_at,
+      cellule: (compte) => (
+        <span className="text-[14px] whitespace-nowrap text-[var(--muted-foreground)]">
+          {formatDateAnnee(compte.created_at.slice(0, 10))}
+        </span>
+      ),
+    },
+    {
+      cle: "actions",
+      libelle: "Actions",
+      classe: "w-[240px]",
+      cellule: (compte) => (
+        <CelluleActions
+          compte={compte}
+          estMoi={actions.estMoi(compte)}
+          busy={actions.busy(compte)}
+          onModifier={() => actions.onModifier(compte)}
+          onDesactiver={() => actions.onDesactiver(compte)}
+          onReactiver={() => actions.onReactiver(compte)}
+        />
+      ),
+    },
+  ];
+}
 
 /**
  * Page `/admin/comptes` : liste des comptes (ordre de l'API), création,
@@ -81,6 +257,8 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
 
   const [feuilleCreation, setFeuilleCreation] = useState(false);
   const [aDesactiver, setADesactiver] = useState<CompteRead | null>(null);
+  const [aModifier, setAModifier] = useState<CompteRead | null>(null);
+  const bureau = useBureau();
 
   // Le hook gère chargement, erreur et « Réessayer » ; `tentative` permet de
   // recharger la liste après une création réussie.
@@ -94,12 +272,12 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
 
   // Le focus revient au bouton « Nouveau compte » quand une feuille se ferme.
   useEffect(() => {
-    const feuilleOuverte = feuilleCreation || aDesactiver !== null;
+    const feuilleOuverte = feuilleCreation || aDesactiver !== null || aModifier !== null;
     if (!feuilleOuverte && refFeuilleOuverte.current) {
       refNouveau.current?.focus();
     }
     refFeuilleOuverte.current = feuilleOuverte;
-  }, [feuilleCreation, aDesactiver]);
+  }, [feuilleCreation, aDesactiver, aModifier]);
 
   async function creerCompte(corps: CorpsCreation): Promise<ResultatCreation> {
     try {
@@ -125,6 +303,45 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
   function apresCreation() {
     setFeuilleCreation(false);
     setAnnonce("Compte créé.");
+    recharger();
+  }
+
+  /**
+   * Édition d'un compte (US-045, feuille ouverte depuis le tableau bureau) :
+   * PATCH nom/e-mail/rôle. Le mot de passe n'est pas modifiable ici. Les
+   * erreurs 401/403/422 sont traitées comme pour la création.
+   */
+  async function modifierCompte(
+    compte: CompteRead,
+    corps: CorpsEdition,
+  ): Promise<ResultatEdition> {
+    try {
+      await apiPatch(`/v1/users/${compte.id}`, corps);
+      return { ok: true };
+    } catch (attrape) {
+      if (attrape instanceof ApiError && attrape.status === 401) {
+        onSessionExpiree();
+        return { ok: false, status: 401, message: "", detail: undefined };
+      }
+      if (attrape instanceof ApiError) {
+        return {
+          ok: false,
+          status: attrape.status,
+          message: attrape.message,
+          detail: attrape.detail,
+        };
+      }
+      return { ok: false, status: 0, message: "Une erreur est survenue.", detail: undefined };
+    }
+  }
+
+  function apresEdition(compte: CompteRead, corps: CorpsEdition) {
+    setAModifier(null);
+    setRemplacements((precedent) => ({
+      ...precedent,
+      [compte.id]: { role: corps.role },
+    }));
+    setAnnonce("Compte modifié.");
     recharger();
   }
 
@@ -213,6 +430,7 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
   });
   const chargement = listeApi.chargement;
   const erreurListe = listeApi.erreur;
+  const erreurStatus = listeApi.erreurStatus;
   const estVide = !chargement && erreurListe === null && liste.length === 0;
 
   return (
@@ -271,13 +489,17 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
             >
               {erreurListe}
             </p>
-            <button
-              type="button"
-              onClick={listeApi.reessayer}
-              className="h-12 w-full rounded-[18px] bg-[var(--primary)] text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
-            >
-              Réessayer
-            </button>
+            {/* « Réessayer » seulement pour une erreur réseau/serveur ; un 403
+                (rôle insuffisant) est définitif : le serveur a refusé. */}
+            {erreurStatus !== 403 && (
+              <button
+                type="button"
+                onClick={listeApi.reessayer}
+                className="h-12 w-full rounded-[18px] bg-[var(--primary)] text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+              >
+                Réessayer
+              </button>
+            )}
           </div>
         )}
 
@@ -287,22 +509,41 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
           </p>
         )}
 
-        {liste.length > 0 && (
-          <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
-            {liste.map((compte) => (
-              <LigneCompte
-                key={compte.id}
-                compte={compte}
-                estMoi={compte.id === utilisateur.id}
-                roleAffiche={rolesChoisis[compte.id] ?? compte.role}
-                busy={actionEnCours === compte.id}
-                onChangerRole={(role) => void changerRole(compte, role)}
-                onDesactiver={() => setADesactiver(compte)}
-                onReactiver={() => void reactiver(compte)}
-              />
-            ))}
-          </ul>
-        )}
+        {liste.length > 0 &&
+          (bureau ? (
+            <TableauTriable
+              titre="Tous les comptes"
+              colonnes={colonnesComptes({
+                onModifier: (compte) => {
+                  setErreurAction(null);
+                  setAModifier(compte);
+                },
+                onDesactiver: (compte) => setADesactiver(compte),
+                onReactiver: (compte) => void reactiver(compte),
+                estMoi: (compte) => compte.id === utilisateur.id,
+                busy: (compte) => actionEnCours === compte.id,
+              })}
+              lignes={liste}
+              cleLigne={(compte) => compte.id}
+              vers={(compte) => `/admin/comptes#${compte.id}`}
+              etiquetteLigne={(compte) => `Modifier le compte ${compte.display_name}`}
+            />
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
+              {liste.map((compte) => (
+                <LigneCompte
+                  key={compte.id}
+                  compte={compte}
+                  estMoi={compte.id === utilisateur.id}
+                  roleAffiche={rolesChoisis[compte.id] ?? compte.role}
+                  busy={actionEnCours === compte.id}
+                  onChangerRole={(role) => void changerRole(compte, role)}
+                  onDesactiver={() => setADesactiver(compte)}
+                  onReactiver={() => void reactiver(compte)}
+                />
+              ))}
+            </ul>
+          ))}
       </section>
 
       {feuilleCreation && (
@@ -319,6 +560,15 @@ export function ComptesPage({ utilisateur, onSessionExpiree }: Props) {
           busy={actionEnCours === aDesactiver.id}
           onAnnuler={() => setADesactiver(null)}
           onConfirmer={() => void confirmerDesactivation()}
+        />
+      )}
+
+      {aModifier !== null && (
+        <FeuilleEditionCompte
+          compte={aModifier}
+          onFerme={() => setAModifier(null)}
+          onModifier={(corps) => modifierCompte(aModifier, corps)}
+          onModifie={(corps) => apresEdition(aModifier, corps)}
         />
       )}
     </main>
@@ -682,6 +932,187 @@ function FeuilleNouveauCompte({
             className="h-[52px] rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:opacity-60"
           >
             {envoiEnCours ? "Création…" : "Créer le compte"}
+          </button>
+        </div>
+      </form>
+    </Feuille>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+type ChampEdition = "display_name" | "email" | "role";
+
+/**
+ * Feuille d'édition d'un compte (US-045, ouverte depuis « Modifier » dans le
+ * tableau bureau) : mêmes champs que la création sauf le mot de passe, mêmes
+ * traitements d'erreurs 403/409/422 (message du serveur + détail par champ).
+ */
+function FeuilleEditionCompte({
+  compte,
+  onFerme,
+  onModifier,
+  onModifie,
+}: {
+  compte: CompteRead;
+  onFerme: () => void;
+  onModifier: (corps: CorpsEdition) => Promise<ResultatEdition>;
+  onModifie: (corps: CorpsEdition) => void;
+}) {
+  const refPremierChamp = useRef<HTMLInputElement>(null);
+  const [nom, setNom] = useState(compte.display_name);
+  const [email, setEmail] = useState(compte.email);
+  const [role, setRole] = useState<Role>((ROLES as readonly string[]).includes(compte.role) ? (compte.role as Role) : "utilisateur");
+  const [erreurs, setErreurs] = useState<Record<ChampEdition, string | null>>({
+    display_name: null,
+    email: null,
+    role: null,
+  });
+  const [erreurGlobale, setErreurGlobale] = useState<string | null>(null);
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+
+  useEffect(() => {
+    refPremierChamp.current?.focus();
+  }, []);
+
+  async function envoyer() {
+    if (envoiEnCours) return;
+    setEnvoiEnCours(true);
+    setErreurGlobale(null);
+    setErreurs({ display_name: null, email: null, role: null });
+    const corps: CorpsEdition = {
+      email: email.trim(),
+      display_name: nom.trim(),
+      role,
+    };
+    const resultat = await onModifier(corps);
+    if (resultat.ok) {
+      onModifie(corps);
+      return;
+    }
+    if (resultat.status === 401) return; // onSessionExpiree() déjà appelé
+    if (resultat.status === 422) {
+      const nouvelles: Record<ChampEdition, string | null> = {
+        display_name: null,
+        email: null,
+        role: null,
+      };
+      for (const entree of erreursDeDetail(resultat.detail)) {
+        if (entree.champ !== null && entree.champ in nouvelles) {
+          nouvelles[entree.champ as ChampEdition] = entree.message;
+        } else {
+          setErreurGlobale(entree.message);
+        }
+      }
+      setErreurs(nouvelles);
+    } else {
+      setErreurGlobale(resultat.message);
+    }
+    setEnvoiEnCours(false);
+  }
+
+  function gererSoumission(evenement: FormEvent<HTMLFormElement>) {
+    evenement.preventDefault();
+    void envoyer();
+  }
+
+  function messageErreur(champ: ChampEdition, idErreur: string) {
+    if (erreurs[champ] === null) return null;
+    return (
+      <p
+        role="alert"
+        id={idErreur}
+        className="m-0 mb-1.5 text-[13px] font-semibold text-[var(--erreur-texte)]"
+      >
+        {erreurs[champ]}
+      </p>
+    );
+  }
+
+  return (
+    <Feuille titre={`Modifier ${compte.display_name}`} onFerme={onFerme} peutFermer={!envoiEnCours}>
+      <form onSubmit={gererSoumission} noValidate>
+        {erreurGlobale !== null && (
+          <p
+            role="alert"
+            className="m-0 mb-4 rounded-[16px] bg-[var(--erreur-fond)] p-3 text-[13px] font-semibold text-[var(--erreur-texte)]"
+          >
+            {erreurGlobale}
+          </p>
+        )}
+
+        <div>
+          <label htmlFor="edition-nom" className={CLS_LIBELLE}>
+            Nom affiché
+          </label>
+          {messageErreur("display_name", "erreur-edition-nom")}
+          <input
+            ref={refPremierChamp}
+            id="edition-nom"
+            type="text"
+            autoComplete="name"
+            value={nom}
+            onChange={(evenement) => setNom(evenement.target.value)}
+            aria-invalid={erreurs.display_name !== null || undefined}
+            aria-describedby={erreurs.display_name !== null ? "erreur-edition-nom" : undefined}
+            className={CLS_CHAMP}
+          />
+        </div>
+
+        <div className="mt-4">
+          <label htmlFor="edition-email" className={CLS_LIBELLE}>
+            E-mail
+          </label>
+          {messageErreur("email", "erreur-edition-email")}
+          <input
+            id="edition-email"
+            type="email"
+            autoComplete="off"
+            value={email}
+            onChange={(evenement) => setEmail(evenement.target.value)}
+            aria-invalid={erreurs.email !== null || undefined}
+            aria-describedby={erreurs.email !== null ? "erreur-edition-email" : undefined}
+            className={CLS_CHAMP}
+          />
+        </div>
+
+        <div className="mt-4">
+          <label htmlFor="edition-role" className={CLS_LIBELLE}>
+            Rôle
+          </label>
+          {messageErreur("role", "erreur-edition-role")}
+          <select
+            id="edition-role"
+            value={role}
+            onChange={(evenement) => setRole(evenement.target.value as Role)}
+            aria-invalid={erreurs.role !== null || undefined}
+            aria-describedby={erreurs.role !== null ? "erreur-edition-role" : undefined}
+            className={`${CLS_CHAMP} font-semibold`}
+          >
+            {ROLES.map((option) => (
+              <option key={option} value={option}>
+                {libelleRole(option)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={onFerme}
+            disabled={envoiEnCours}
+            className="h-[52px] rounded-[18px] bg-[var(--secondary)] px-4 text-[15px] font-bold text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:opacity-60"
+          >
+            Annuler
+          </button>
+          <button
+            type="submit"
+            disabled={envoiEnCours}
+            aria-busy={envoiEnCours}
+            className="h-[52px] rounded-[18px] bg-[var(--primary)] px-4 text-[15px] font-bold text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)] disabled:opacity-60"
+          >
+            {envoiEnCours ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
       </form>
