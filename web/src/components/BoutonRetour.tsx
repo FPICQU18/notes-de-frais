@@ -4,14 +4,24 @@ import { useNavigate } from "react-router";
 /**
  * Bouton « Retour » en haut de page, style identique au bouton retour de
  * « Nouvelle dépense » (US-034) : icône `ArrowLeft` + libellé « Retour »,
- * cible ≥ 44 px, focus visible. Revient à la page précédente de l'historique.
+ * cible ≥ 44 px, focus visible. Revient à la page précédente de l'historique ;
+ * si l'appli a été ouverte directement (pas d'entrée précédente, `idx` 0 ou
+ * absent), ramène à l'accueil `/` (US-040).
  */
 export function BoutonRetour({ libelleAria = "Retour" }: { libelleAria?: string }) {
   const navigate = useNavigate();
+  const auClic = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx;
+    if (idx === undefined || idx === 0) {
+      navigate("/");
+    } else {
+      navigate(-1);
+    }
+  };
   return (
     <button
       type="button"
-      onClick={() => navigate(-1)}
+      onClick={auClic}
       aria-label={libelleAria}
       className="inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-[18px] border-0 bg-[var(--secondary)] px-3 text-[15px] font-bold text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
     >
