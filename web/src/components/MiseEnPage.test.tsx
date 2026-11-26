@@ -1,7 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+/// <reference types="node" />
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Link, Route, Routes } from "react-router";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { NoteValidation, UserRead } from "../api/client";
 import { MiseEnPage } from "./MiseEnPage";
@@ -80,6 +83,11 @@ function renderMiseEnPage(
         >
           <Route path="/" element={<div>Page accueil</div>} />
           <Route
+            path="/depenses/nouvelle"
+            element={<div>Formulaire nouvelle dépense</div>}
+          />
+          <Route path="/depenses/:id" element={<div>Formulaire modification</div>} />
+          <Route
             path="/validation"
             element={
               <div>
@@ -102,8 +110,181 @@ function renderMiseEnPage(
   );
 }
 
+/* --------------------------------------------------------- US-042 (bureau) */
+
+type Ecouteur = (evenement: MediaQueryListEvent) => void;
+
+/**
+ * Mock de `window.matchMedia` piloté par la largeur : `definirLargeur(px)`
+ * met à jour `matches` et notifie les écouteurs, comme au redimensionnement.
+ */
+function mockLargeur(largeurInitiale: number) {
+  let largeur = largeurInitiale;
+  const ecouteurs = new Set<Ecouteur>();
+  vi.stubGlobal("matchMedia", (requete: string) => {
+    const correspond = () =>
+      requete === "(min-width: 1024px)" ? largeur >= 1024 : false;
+    return {
+      get matches() {
+        return correspond();
+      },
+      media: requete,
+      addEventListener: (_: string, ecouteur: Ecouteur) => ecouteurs.add(ecouteur),
+      removeEventListener: (_: string, ecouteur: Ecouteur) => ecouteurs.delete(ecouteur),
+    } as unknown as MediaQueryList;
+  });
+  return {
+    definirLargeur(px: number) {
+      largeur = px;
+      const evenement = {
+        matches: px >= 1024,
+        media: "(min-width: 1024px)",
+      } as MediaQueryListEvent;
+      for (const ecouteur of ecouteurs) ecouteur(evenement);
+    },
+  };
+}
+
+function barreLaterale(): HTMLElement {
+  return document.querySelector("nav.barre-laterale") as HTMLElement;
+}
+
+function barreFlottante(): HTMLElement | null {
+  return document.querySelector("nav.barre-navigation");
+}
+
+beforeEach(() => {
+  // Par défaut, les tests existants tournent en mobile (largeur < 1024 px).
+  mockLargeur(800);
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+test("US-042 — 1023 px : barre flottante présente, pas de barre latérale", async () => {
+  mockLargeur(1023);
+  mockValidation([]);
+  renderMiseEnPage(UTILISATEUR);
+
+  expect(await screen.findByRole("link", { name: "Accueil" })).toBeInTheDocument();
+  expect(barreFlottante()).not.toBeNull();
+  expect(barreLaterale()).toBeNull();
+  expect(barreFlottante()?.className).toContain("print:hidden");
+});
+
+test("US-042 — 1024 px : le conteneur de contenu est centré dans l'espace restant (marge gauche de la barre) et limité à 1100 px", async () => {
+  mockLargeur(1024);
+  mockValidation([]);
+  const { container } = renderMiseEnPage(UTILISATEUR);
+
+  await screen.findByRole("link", { name: "Accueil" });
+  const contenu = container.querySelector(".mise-en-page__contenu") as HTMLElement;
+  expect(contenu).not.toBeNull();
+  // La feuille de style de l'application (index.css), lue telle qu'écrite
+  // sur disque (cwd = racine web) : elle contient la media query bureau.
+  const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf-8");
+  expect(css).toContain("@media (min-width: 1024px)");
+  const bloc = css.slice(css.indexOf("@media (min-width: 1024px)"));
+  expect(bloc).toContain("max-width: 1100px");
+  expect(bloc).toContain("margin-inline: auto");
+  expect(bloc).toContain("margin-left: 280px");
+  // Formulaire 640 px en bureau.
+  expect(bloc).toMatch(/\.formulaire-depense[^}]*max-width: 640px/s);
+  expect(bloc).toMatch(/\.carte-connexion[^}]*max-width: 640px/s);
+});
+
+test("US-042 — < 1024 px : la règle de base du conteneur reste max-width 26 rem, centré", () => {
+  const css = readFileSync(join(process.cwd(), "src", "index.css"), "utf-8");
+  const base = css.slice(0, css.indexOf("@media (min-width: 1024px)"));
+  expect(base).toMatch(/\.mise-en-page\s*\{[^}]*max-width: 26rem[^}]*margin-inline: auto[^}]*\}/s);
+});
+
+test("US-042 — 1024 px : barre latérale fixe, pas de barre flottante, pastille visible pour un valideur", async () => {
+  mockLargeur(1024);
+  mockValidation([note(1, 1), note(2, 2), note(3, 1)]);
+  renderMiseEnPage(VALIDEUR);
+
+  const lien = await screen.findByRole("link", { name: "Validation, 2 dossiers à traiter" });
+  const laterale = barreLaterale();
+  expect(laterale).not.toBeNull();
+  expect(laterale?.className).toContain("print:hidden");
+  expect(barreFlottante()).toBeNull();
+  // Mêmes entrées que la barre mobile, plus le bouton « Nouvelle dépense » en tête.
+  expect(within(laterale as HTMLElement).getByRole("link", { name: "Accueil" })).toBeInTheDocument();
+  expect(within(laterale as HTMLElement).getByRole("link", { name: "Dépenses" })).toBeInTheDocument();
+  expect(within(laterale as HTMLElement).getByRole("link", { name: "Nouvelle dépense" })).toBeInTheDocument();
+  expect(within(laterale as HTMLElement).getByRole("link", { name: "Dossiers" })).toBeInTheDocument();
+  expect(within(laterale as HTMLElement).getByText("2")).toHaveAttribute("aria-hidden", "true");
+  expect(lien.className).toContain("barre-laterale__lien");
+});
+
+test("US-042 — 1024 px, rôle utilisateur : entrée Profil au lieu de Validation", async () => {
+  mockLargeur(1024);
+  mockValidation([]);
+  renderMiseEnPage(UTILISATEUR);
+
+  const laterale = await screen.findByRole("navigation", { name: "Navigation principale" });
+  expect(within(laterale).getByRole("link", { name: "Profil" })).toBeInTheDocument();
+  expect(within(laterale).queryByRole("link", { name: /^Validation/ })).not.toBeInTheDocument();
+});
+
+test("US-042 — changement dynamique de largeur : 1024 → 900 bascule vers la barre flottante", async () => {
+  const media = mockLargeur(1024);
+  mockValidation([]);
+  renderMiseEnPage(UTILISATEUR);
+
+  expect(await screen.findByRole("link", { name: "Accueil" })).toBeInTheDocument();
+  expect(barreLaterale()).not.toBeNull();
+  expect(barreFlottante()).toBeNull();
+
+  act(() => media.definirLargeur(900));
+  expect(barreLaterale()).toBeNull();
+  expect(barreFlottante()).not.toBeNull();
+
+  act(() => media.definirLargeur(1440));
+  expect(barreLaterale()).not.toBeNull();
+  expect(barreFlottante()).toBeNull();
+});
+
+test("US-042 — 1024 px sur un formulaire de dépense : la barre latérale reste visible", async () => {
+  mockLargeur(1024);
+  mockValidation([]);
+  renderMiseEnPage(UTILISATEUR, { url: "/depenses/nouvelle" });
+
+  expect(await screen.findByText("Formulaire nouvelle dépense")).toBeInTheDocument();
+  expect(barreLaterale()).not.toBeNull();
+  expect(barreFlottante()).toBeNull();
+});
+
+test("US-042 — 800 px sur un formulaire de dépense : la barre flottante est masquée (comportement actuel inchangé)", async () => {
+  mockLargeur(800);
+  mockValidation([]);
+  renderMiseEnPage(UTILISATEUR, { url: "/depenses/7" });
+
+  expect(await screen.findByText("Formulaire modification")).toBeInTheDocument();
+  expect(barreFlottante()).toBeNull();
+  expect(barreLaterale()).toBeNull();
+});
+
+test("US-042 — la pastille garde son comportement en mode bureau (rafraîchie à la navigation)", async () => {
+  const media = mockLargeur(1024);
+  const { notesCourantes } = mockValidation([note(1, 1), note(2, 1)]);
+  const utilisateur = userEvent.setup();
+  renderMiseEnPage(VALIDEUR);
+
+  expect(await screen.findByRole("link", { name: "Validation, 2 dossiers à traiter" })).toBeInTheDocument();
+
+  notesCourantes.liste = [note(1, 1)];
+  await utilisateur.click(screen.getByRole("link", { name: /^Validation/ }));
+  await utilisateur.click(await screen.findByRole("link", { name: "Détail 5" }));
+  await utilisateur.click(await screen.findByRole("link", { name: "Retour à la liste" }));
+
+  expect(await screen.findByRole("link", { name: "Validation, 1 dossier à traiter" })).toBeInTheDocument();
+  act(() => media.definirLargeur(800));
+  expect(await screen.findByRole("link", { name: "Validation, 1 dossier à traiter" })).toBeInTheDocument();
+  expect(barreFlottante()).not.toBeNull();
 });
 
 test("valideur : pastille avec le nombre de dossiers à traiter, hors dossiers dont il est propriétaire", async () => {
