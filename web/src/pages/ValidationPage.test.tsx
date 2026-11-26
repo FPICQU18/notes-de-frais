@@ -1,9 +1,14 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test, vi } from "vitest";
-import { MemoryRouter } from "react-router";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
-import type { NoteValidation, UserRead } from "../api/client";
+import type {
+  NoteValidation,
+  TransitionRead,
+  UserRead,
+  ValidationNoteDetail,
+} from "../api/client";
 import { ValidationPage } from "./ValidationPage";
 
 const VALIDEUR: UserRead = {
@@ -64,6 +69,7 @@ function renderPage(options: { utilisateur?: UserRead; onSessionExpiree?: () => 
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -413,5 +419,402 @@ describe("pastille « À rembourser » (US-035)", () => {
     await utilisateur.click(screen.getByRole("tab", { name: "Remboursés" }));
     await within(screen.getByRole("tabpanel")).findByText("Remboursée");
     expect(within(screen.getByRole("tabpanel")).queryByText("À rembourser")).not.toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------- US-043 (maître-détail bureau) */
+
+type EcouteurMedia = (evenement: MediaQueryListEvent) => void;
+
+/**
+ * Mock de `window.matchMedia` piloté par la largeur : `definirLargeur(px)`
+ * met à jour `matches` et notifie les écouteurs, comme au redimensionnement
+ * (même patron que `MiseEnPage.test.tsx`, US-042).
+ */
+function mockLargeur(largeurInitiale: number) {
+  let largeur = largeurInitiale;
+  const ecouteurs = new Set<EcouteurMedia>();
+  vi.stubGlobal("matchMedia", (requete: string) => {
+    const correspond = () =>
+      requete === "(min-width: 1024px)" ? largeur >= 1024 : false;
+    return {
+      get matches() {
+        return correspond();
+      },
+      media: requete,
+      addEventListener: (_: string, ecouteur: EcouteurMedia) => ecouteurs.add(ecouteur),
+      removeEventListener: (_: string, ecouteur: EcouteurMedia) => ecouteurs.delete(ecouteur),
+    } as unknown as MediaQueryList;
+  });
+  return {
+    definirLargeur(px: number) {
+      largeur = px;
+      const evenement = {
+        matches: px >= 1024,
+        media: "(min-width: 1024px)",
+      } as MediaQueryListEvent;
+      for (const ecouteur of ecouteurs) ecouteur(evenement);
+    },
+  };
+}
+
+function detailValidation(
+  partiel: Partial<ValidationNoteDetail> & { id: number },
+): ValidationNoteDetail {
+  return {
+    libelle: `Dossier ${partiel.id}`,
+    statut: "soumise",
+    total_centimes: 18000,
+    nb_depenses: 1,
+    soumise_at: "2026-11-21T09:30:00Z",
+    proprietaire: { id: 99, display_name: "Camille Dupont" },
+    depenses: [
+      {
+        id: partiel.id * 100,
+        libelle: "Déjeuner client",
+        date_depense: "2026-11-18",
+        montant_centimes: 18000,
+        categorie: "repas",
+        commentaire: null,
+        note_id: partiel.id,
+        created_at: "2026-11-18T12:00:00Z",
+        updated_at: "2026-11-18T12:00:00Z",
+      },
+    ],
+    ...partiel,
+  };
+}
+
+function transitionHistorique(id: number): TransitionRead {
+  return {
+    id,
+    acteur: { id: 99, display_name: "Camille Dupont" },
+    ancien_statut: "brouillon",
+    nouveau_statut: "soumise",
+    motif: null,
+    created_at: "2026-11-21T09:30:00Z",
+  };
+}
+
+/** Page de stub pour `/validation/:id`, afin de détecter toute navigation. */
+function StubDetailValidation() {
+  const location = useLocation();
+  return <div>DETAIL PAGE{location.pathname}</div>;
+}
+
+function renderPageAvecRoutes(options: { largeur: number; annonce?: string } = { largeur: 800 }) {
+  mockLargeur(options.largeur);
+  const onSessionExpiree = vi.fn();
+  const utils = render(
+    <MemoryRouter
+      initialEntries={[
+        {
+          pathname: "/validation",
+          state: options.annonce === undefined ? undefined : { annonce: options.annonce },
+        },
+      ]}
+    >
+      <Routes>
+        <Route
+          path="/validation"
+          element={<ValidationPage utilisateur={VALIDEUR} onSessionExpiree={onSessionExpiree} />}
+        />
+        <Route path="/validation/:id" element={<StubDetailValidation />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  return { onSessionExpiree, ...utils };
+}
+
+/** Routeur d'API pour le maître-détail : file « soumise » + détails + historique. */
+function apiMaitreDetail(
+  notes: NoteValidation[],
+  details: Record<number, ValidationNoteDetail>,
+  options: { apresDecision?: NoteValidation[] } = {},
+) {
+  let nbDecisions = 0;
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+    const url = String(entree);
+    const methode = init?.method ?? "GET";
+    if (url.startsWith("/api/v1/depenses/") && url.endsWith("/justificatif")) {
+      return jsonResponse({ detail: "Introuvable" }, 404);
+    }
+    if (url === "/api/v1/validation/notes?statut=soumise" && methode === "GET") {
+      // Après une décision, la file rechargée ne contient plus le dossier traité.
+      return jsonResponse(nbDecisions > 0 ? (options.apresDecision ?? []) : notes);
+    }
+    const matchDetail = /^\/api\/v1\/validation\/notes\/(\d+)$/.exec(url);
+    if (matchDetail && methode === "GET") {
+      const detail = details[Number(matchDetail[1])];
+      return detail === undefined
+        ? jsonResponse({ detail: "Introuvable" }, 404)
+        : jsonResponse(detail);
+    }
+    const matchHistorique = /^\/api\/v1\/notes\/(\d+)\/historique$/.exec(url);
+    if (matchHistorique && methode === "GET") {
+      return jsonResponse([transitionHistorique(1)]);
+    }
+    if (methode === "POST" && /\/valider$/.test(url)) {
+      nbDecisions += 1;
+      return jsonResponse({ detail: "OK" });
+    }
+    if (methode === "POST" && /\/refuser$/.test(url)) {
+      nbDecisions += 1;
+      return jsonResponse({ detail: "OK" });
+    }
+    return jsonResponse([]);
+  });
+}
+
+beforeEach(() => {
+  // Par défaut, les tests existants tournent en mobile (largeur < 1024 px).
+  mockLargeur(800);
+});
+
+describe("US-043 — maître-détail ≥ 1024 px", () => {
+  test("1023 px : les cartes restent des liens vers /validation/:id (aucune navigation au clic simulé, rôle lien)", async () => {
+    apiMaitreDetail(
+      [noteValidation({ id: 7 }), noteValidation({ id: 8 })],
+      {},
+    );
+    renderPageAvecRoutes({ largeur: 1023 });
+
+    const cartes = await screen.findAllByRole("listitem");
+    const hrefs = cartes.map((carte) => within(carte).getByRole("link").getAttribute("href"));
+    expect(hrefs).toEqual(["/validation/7", "/validation/8"]);
+    // Pas de panneau détail, pas de bouton de sélection.
+    expect(screen.queryByRole("button", { name: /Dossier 7/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Aucun dossier sélectionné.")).not.toBeInTheDocument();
+  });
+
+  test("1024 px : la file s'affiche à gauche et le premier dossier est sélectionné automatiquement dans le panneau", async () => {
+    apiMaitreDetail(
+      [noteValidation({ id: 1, libelle: "Déplacement Paris" }), noteValidation({ id: 2, libelle: "Salon Lyon" })],
+      {
+        1: detailValidation({ id: 1, libelle: "Déplacement Paris" }),
+        2: detailValidation({ id: 2, libelle: "Salon Lyon" }),
+      },
+    );
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    // File : mêmes onglets, mêmes cartes, rendues en boutons sélectionnables.
+    expect(screen.getByRole("tab", { name: "À traiter" })).toHaveAttribute("aria-selected", "true");
+    const carte1 = await screen.findByRole("button", { name: /Déplacement Paris/ });
+    expect(carte1).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Salon Lyon/ })).toHaveAttribute("aria-pressed", "false");
+
+    // Panneau : détail du dossier 1 chargé (pas de navigation vers /validation/:id).
+    const panneau = await screen.findByLabelText("Détail du dossier sélectionné");
+    expect(within(panneau).getByRole("heading", { name: "Déplacement Paris" })).toBeInTheDocument();
+    expect(within(panneau).getByText("Camille Dupont")).toBeInTheDocument();
+    // Total du dossier (34 px) et montant de la dépense (petit) : au moins un 180,00 €.
+    expect(within(panneau).getAllByText("180,00 €").length).toBeGreaterThan(0);
+    expect(within(panneau).getByText("Déjeuner client")).toBeInTheDocument();
+    expect(within(panneau).getByRole("heading", { name: "Historique" })).toBeInTheDocument();
+    expect(within(panneau).getByRole("button", { name: "Valider" })).toBeInTheDocument();
+    expect(within(panneau).getByRole("button", { name: "Refuser" })).toBeInTheDocument();
+    expect(screen.queryByText(/DETAIL PAGE/)).not.toBeInTheDocument();
+  });
+
+  test("1024 px : sélectionner un dossier dans la file met à jour le panneau sans changer de page", async () => {
+    apiMaitreDetail(
+      [noteValidation({ id: 1, libelle: "Déplacement Paris" }), noteValidation({ id: 2, libelle: "Salon Lyon" })],
+      {
+        1: detailValidation({ id: 1, libelle: "Déplacement Paris" }),
+        2: detailValidation({ id: 2, libelle: "Salon Lyon" }),
+      },
+    );
+    const utilisateur = userEvent.setup();
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    const carte2 = await screen.findByRole("button", { name: /Salon Lyon/ });
+    await utilisateur.click(carte2);
+
+    expect(carte2).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Déplacement Paris/ })).toHaveAttribute("aria-pressed", "false");
+    const panneau = screen.getByLabelText("Détail du dossier sélectionné");
+    expect(within(panneau).getByRole("heading", { name: "Salon Lyon" })).toBeInTheDocument();
+    // Toujours sur /validation : aucune navigation.
+    expect(screen.queryByText(/DETAIL PAGE/)).not.toBeInTheDocument();
+  });
+
+  test("1024 px : après « Valider », le dossier quitte la file et le suivant est sélectionné, avec l'annonce conservée", async () => {
+    apiMaitreDetail(
+      [noteValidation({ id: 1, libelle: "Déplacement Paris" }), noteValidation({ id: 2, libelle: "Salon Lyon" })],
+      {
+        1: detailValidation({ id: 1, libelle: "Déplacement Paris" }),
+        2: detailValidation({ id: 2, libelle: "Salon Lyon" }),
+      },
+      { apresDecision: [noteValidation({ id: 2, libelle: "Salon Lyon" })] },
+    );
+    const utilisateur = userEvent.setup();
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    const panneau = await screen.findByLabelText("Détail du dossier sélectionné");
+    await within(panneau).findByRole("heading", { name: "Déplacement Paris" });
+    await utilisateur.click(within(panneau).getByRole("button", { name: "Valider" }));
+    await utilisateur.click(
+      await within(screen.getByRole("dialog", { name: "Valider ce dossier ?" })).findByRole("button", { name: "Confirmer" }),
+    );
+
+    // Annonce conservée + dossier suivant sélectionné automatiquement.
+    expect(await screen.findByRole("status")).toHaveTextContent("Dossier validé.");
+    const carte2 = await screen.findByRole("button", { name: /Salon Lyon/ });
+    await waitFor(() => expect(carte2).toHaveAttribute("aria-pressed", "true"));
+    const panneauSuivant = screen.getByLabelText("Détail du dossier sélectionné");
+    expect(within(panneauSuivant).getByRole("heading", { name: "Salon Lyon" })).toBeInTheDocument();
+    // Le dossier validé a quitté la file « À traiter ».
+    expect(screen.queryByRole("button", { name: /Déplacement Paris/ })).not.toBeInTheDocument();
+    // Pas de navigation.
+    expect(screen.queryByText(/DETAIL PAGE/)).not.toBeInTheDocument();
+  });
+
+  test("1024 px : après « Refuser » (motif saisi), annonce « Dossier refusé. » et dossier suivant sélectionné", async () => {
+    apiMaitreDetail(
+      [noteValidation({ id: 1, libelle: "Déplacement Paris" }), noteValidation({ id: 2, libelle: "Salon Lyon" })],
+      {
+        1: detailValidation({ id: 1, libelle: "Déplacement Paris" }),
+        2: detailValidation({ id: 2, libelle: "Salon Lyon" }),
+      },
+      { apresDecision: [noteValidation({ id: 2, libelle: "Salon Lyon" })] },
+    );
+    const utilisateur = userEvent.setup();
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    const panneau = await screen.findByLabelText("Détail du dossier sélectionné");
+    await within(panneau).findByRole("heading", { name: "Déplacement Paris" });
+    await utilisateur.click(within(panneau).getByRole("button", { name: "Refuser" }));
+    const dialogue = await screen.findByRole("dialog", { name: "Refuser le dossier" });
+    await utilisateur.type(within(dialogue).getByLabelText("Motif du refus"), "Justificatifs manquants");
+    await utilisateur.click(within(dialogue).getByRole("button", { name: "Confirmer le refus" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Dossier refusé.");
+    const carte2 = await screen.findByRole("button", { name: /Salon Lyon/ });
+    await waitFor(() => expect(carte2).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.queryByRole("button", { name: /Déplacement Paris/ })).not.toBeInTheDocument();
+  });
+
+  test("1024 px : file « À traiter » vide après décision → le panneau affiche l'état vide de la maquette", async () => {
+    apiMaitreDetail(
+      [noteValidation({ id: 1, libelle: "Déplacement Paris" })],
+      { 1: detailValidation({ id: 1, libelle: "Déplacement Paris" }) },
+      { apresDecision: [] },
+    );
+    const utilisateur = userEvent.setup();
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    const panneau = await screen.findByLabelText("Détail du dossier sélectionné");
+    await within(panneau).findByRole("heading", { name: "Déplacement Paris" });
+    await utilisateur.click(within(panneau).getByRole("button", { name: "Valider" }));
+    await utilisateur.click(
+      await within(screen.getByRole("dialog", { name: "Valider ce dossier ?" })).findByRole("button", { name: "Confirmer" }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Dossier validé.");
+    expect(await screen.findByText("Aucun dossier sélectionné.")).toBeInTheDocument();
+    expect(screen.getByText("Sélectionnez un dossier dans la file.")).toBeInTheDocument();
+    expect(screen.getByText("Aucun dossier à traiter.")).toBeInTheDocument();
+  });
+
+  test("1024 px : file « À traiter » vide au chargement → état vide du panneau, aucune sélection", async () => {
+    apiMaitreDetail([], {});
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    expect(await screen.findByText("Aucun dossier à traiter.")).toBeInTheDocument();
+    expect(await screen.findByText("Aucun dossier sélectionné.")).toBeInTheDocument();
+    expect(screen.getByText("Sélectionnez un dossier dans la file.")).toBeInTheDocument();
+  });
+
+  test("1024 px : erreur 403 sur la décision → message du serveur dans l'alerte, sans « Réessayer », sélection inchangée", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+      const url = String(entree);
+      const methode = init?.method ?? "GET";
+      if (url.startsWith("/api/v1/depenses/") && url.endsWith("/justificatif")) {
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }
+      if (url === "/api/v1/validation/notes?statut=soumise") {
+        return jsonResponse([noteValidation({ id: 1, libelle: "Déplacement Paris" })]);
+      }
+      if (/^\/api\/v1\/validation\/notes\/\d+$/.test(url)) {
+        return jsonResponse(detailValidation({ id: 1, libelle: "Déplacement Paris" }));
+      }
+      if (/\/historique$/.test(url)) return jsonResponse([transitionHistorique(1)]);
+      if (methode === "POST" && /\/valider$/.test(url)) {
+        return jsonResponse({ detail: "Vous ne pouvez pas valider votre propre dossier." }, 403);
+      }
+      return jsonResponse([]);
+    });
+    const utilisateur = userEvent.setup();
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    const panneau = await screen.findByLabelText("Détail du dossier sélectionné");
+    await within(panneau).findByRole("heading", { name: "Déplacement Paris" });
+    await utilisateur.click(within(panneau).getByRole("button", { name: "Valider" }));
+    await utilisateur.click(
+      await within(screen.getByRole("dialog", { name: "Valider ce dossier ?" })).findByRole("button", { name: "Confirmer" }),
+    );
+
+    const alerte = await within(panneau).findByRole("alert");
+    expect(alerte).toHaveTextContent("Vous ne pouvez pas valider votre propre dossier.");
+    expect(within(panneau).queryByRole("button", { name: "Réessayer" })).not.toBeInTheDocument();
+    // Pas de resélection : le dossier reste sélectionné.
+    expect(screen.getByRole("button", { name: /Déplacement Paris/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("1024 px : 401 sur la décision → onSessionExpiree appelée", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entree, init) => {
+      const url = String(entree);
+      const methode = init?.method ?? "GET";
+      if (url === "/api/v1/validation/notes?statut=soumise") {
+        return jsonResponse([noteValidation({ id: 1, libelle: "Déplacement Paris" })]);
+      }
+      if (/^\/api\/v1\/validation\/notes\/\d+$/.test(url)) {
+        return jsonResponse(detailValidation({ id: 1, libelle: "Déplacement Paris" }));
+      }
+      if (/\/historique$/.test(url)) return jsonResponse([transitionHistorique(1)]);
+      if (methode === "POST") return jsonResponse({ detail: "Session expirée." }, 401);
+      if (url.startsWith("/api/v1/depenses/") && url.endsWith("/justificatif")) {
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }
+      return jsonResponse([]);
+    });
+    const utilisateur = userEvent.setup();
+    const { onSessionExpiree } = renderPageAvecRoutes({ largeur: 1024 });
+
+    const panneau = await screen.findByLabelText("Détail du dossier sélectionné");
+    await within(panneau).findByRole("heading", { name: "Déplacement Paris" });
+    await utilisateur.click(within(panneau).getByRole("button", { name: "Valider" }));
+    await utilisateur.click(
+      await within(screen.getByRole("dialog", { name: "Valider ce dossier ?" })).findByRole("button", { name: "Confirmer" }),
+    );
+
+    await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  });
+
+  test("1024 px : les autres onglets restent fonctionnels (mêmes données, mêmes cartes)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) => {
+      const url = String(entree);
+      const statut = statutDeUrl(url);
+      if (url.startsWith("/api/v1/depenses/") && url.endsWith("/justificatif")) {
+        return jsonResponse({ detail: "Introuvable" }, 404);
+      }
+      if (/^\/api\/v1\/validation\/notes\/\d+$/.test(url)) {
+        return jsonResponse(detailValidation({ id: 1, libelle: "Déplacement Paris" }));
+      }
+      if (/\/historique$/.test(url)) return jsonResponse([transitionHistorique(1)]);
+      if (statut === "validee") {
+        return jsonResponse([noteValidation({ id: 5, statut: "validee", libelle: "Dossier validé A" })]);
+      }
+      if (statut === "soumise") {
+        return jsonResponse([noteValidation({ id: 1, libelle: "Déplacement Paris" })]);
+      }
+      return jsonResponse([]);
+    });
+    const utilisateur = userEvent.setup();
+    renderPageAvecRoutes({ largeur: 1024 });
+
+    await screen.findByRole("button", { name: /Déplacement Paris/ });
+    await utilisateur.click(screen.getByRole("tab", { name: "Validés" }));
+    expect(await screen.findByRole("button", { name: /Dossier validé A/ })).toBeInTheDocument();
   });
 });
