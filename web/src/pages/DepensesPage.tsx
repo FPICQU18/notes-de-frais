@@ -3,8 +3,13 @@ import { Link, useLocation } from "react-router";
 import { Check, Receipt } from "lucide-react";
 
 import type { Depense } from "../api/client";
+import { BulleCategorie } from "../components/depense/BulleCategorie";
 import { CarteDepense } from "../components/depense/CarteDepense";
+import { TableauTriable, type ColonneTableau } from "../components/TableauTriable";
 import { useApiGet } from "../lib/useApiGet";
+import { useBureau } from "../lib/useMediaQuery";
+import { libelleCategorie } from "../lib/categories";
+import { formatDateAnnee, formatMontant } from "../lib/format";
 
 type Props = {
   onSessionExpiree: () => void;
@@ -17,10 +22,72 @@ const ANNONCES = new Set([
   "Dépense supprimée.",
 ]);
 
+/** Colonnes du tableau bureau des dépenses (US-044), dans l'ordre de la maquette. */
+function colonnesDepenses(): ColonneTableau<Depense>[] {
+  return [
+    {
+      cle: "date",
+      libelle: "Date",
+      triable: true,
+      classe: "w-[190px]",
+      valeurTri: (depense) => depense.date_depense,
+      cellule: (depense) => (
+        <span className="flex items-center gap-2 text-[14px] whitespace-nowrap text-[var(--muted-foreground)]">
+          <BulleCategorie categorie={depense.categorie} />
+          <span>{formatDateAnnee(depense.date_depense)}</span>
+        </span>
+      ),
+    },
+    {
+      cle: "libelle",
+      libelle: "Libellé",
+      classe: "min-w-0 flex-1",
+      cellule: (depense) => (
+        <span className="block truncate text-[15px] font-bold">{depense.libelle}</span>
+      ),
+    },
+    {
+      cle: "categorie",
+      libelle: "Catégorie",
+      classe: "w-[150px]",
+      cellule: (depense) => (
+        <span className="text-[14px] whitespace-nowrap text-[var(--muted-foreground)]">
+          {libelleCategorie(depense.categorie)}
+        </span>
+      ),
+    },
+    {
+      cle: "montant",
+      libelle: "Montant",
+      triable: true,
+      classe: "w-[130px]",
+      valeurTri: (depense) => depense.montant_centimes,
+      cellule: (depense) => (
+        <span className="block text-right text-[15px] font-extrabold tabular-nums">
+          {formatMontant(depense.montant_centimes)}
+        </span>
+      ),
+    },
+    {
+      cle: "statut",
+      libelle: "Statut",
+      classe: "w-[130px]",
+      // Rattachement dossier (maquette bureau-dépenses) : « À classer » quand
+      // la dépense n'est rattachée à aucun dossier, sinon « Dossier #<id> ».
+      cellule: (depense) => (
+        <span className="text-[13px] font-semibold text-[var(--muted-foreground)]">
+          {depense.note_id === null ? "À classer" : `Dossier n° ${depense.note_id}`}
+        </span>
+      ),
+    },
+  ];
+}
+
 export function DepensesPage({ onSessionExpiree }: Props) {
   const refTitre = useRef<HTMLHeadingElement>(null);
   const location = useLocation();
   const depenses = useApiGet<Depense[]>("/v1/depenses", onSessionExpiree);
+  const bureau = useBureau();
 
   useEffect(() => {
     refTitre.current?.focus();
@@ -96,13 +163,23 @@ export function DepensesPage({ onSessionExpiree }: Props) {
           </div>
         )}
 
-        {!depenses.chargement && depenses.erreur === null && liste.length > 0 && (
-          <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
-            {liste.map((depense) => (
-              <CarteDepense key={depense.id} depense={depense} vers={`/depenses/${depense.id}`} />
-            ))}
-          </ul>
-        )}
+        {!depenses.chargement && depenses.erreur === null && liste.length > 0 &&
+          (bureau ? (
+            <TableauTriable
+              titre="Toutes les dépenses"
+              colonnes={colonnesDepenses()}
+              lignes={liste}
+              cleLigne={(depense) => depense.id}
+              vers={(depense) => `/depenses/${depense.id}`}
+              etiquetteLigne={(depense) => `Ouvrir la dépense ${depense.libelle}`}
+            />
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
+              {liste.map((depense) => (
+                <CarteDepense key={depense.id} depense={depense} vers={`/depenses/${depense.id}`} />
+              ))}
+            </ul>
+          ))}
       </section>
     </main>
   );

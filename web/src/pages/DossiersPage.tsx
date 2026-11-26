@@ -5,11 +5,74 @@ import { Folder, Plus } from "lucide-react";
 import type { Note } from "../api/client";
 import { CarteDossier } from "../components/dossier/CarteDossier";
 import { NouveauDossierDialog } from "../components/dossier/NouveauDossierDialog";
+import { PastilleStatut } from "../components/dossier/PastilleStatut";
+import { TableauTriable, type ColonneTableau } from "../components/TableauTriable";
 import { useApiGet } from "../lib/useApiGet";
+import { useBureau } from "../lib/useMediaQuery";
+import { formatDateAnnee, formatMontant, formatNbDepenses } from "../lib/format";
 
 type Props = {
   onSessionExpiree: () => void;
 };
+
+/** Colonnes du tableau bureau des dossiers (US-044), dans l'ordre de la maquette. */
+function colonnesDossiers(): ColonneTableau<Note>[] {
+  return [
+    {
+      cle: "date",
+      libelle: "Date",
+      triable: true,
+      classe: "w-[170px]",
+      valeurTri: (note) => note.derniere_depense_le ?? "",
+      cellule: (note) => (
+        <span className="text-[14px] whitespace-nowrap text-[var(--muted-foreground)]">
+          {note.derniere_depense_le === null
+            ? "Aucune dépense"
+            : formatDateAnnee(note.derniere_depense_le)}
+        </span>
+      ),
+    },
+    {
+      cle: "libelle",
+      libelle: "Libellé",
+      classe: "min-w-0 flex-1",
+      cellule: (note) => (
+        <span className="block truncate text-[15px] font-bold">
+          {note.libelle}
+          <span className="ml-2 text-[13px] font-semibold whitespace-nowrap text-[var(--muted-foreground)]">
+            {formatNbDepenses(note.nb_depenses)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      cle: "categorie",
+      libelle: "Catégorie",
+      classe: "w-[140px]",
+      // Un dossier n'a pas de catégorie propre (l'API `Note` n'en renvoie
+      // pas) : colonne présente mais non applicable.
+      cellule: () => <span className="text-[14px] text-[var(--muted-foreground)]">—</span>,
+    },
+    {
+      cle: "montant",
+      libelle: "Montant",
+      triable: true,
+      classe: "w-[130px]",
+      valeurTri: (note) => note.total_centimes,
+      cellule: (note) => (
+        <span className="block text-right text-[15px] font-extrabold tabular-nums">
+          {formatMontant(note.total_centimes)}
+        </span>
+      ),
+    },
+    {
+      cle: "statut",
+      libelle: "Statut",
+      classe: "w-[130px]",
+      cellule: (note) => <PastilleStatut statut={note.statut} />,
+    },
+  ];
+}
 
 /** Liste des dossiers de l'utilisateur + création d'un nouveau dossier. */
 export function DossiersPage({ onSessionExpiree }: Props) {
@@ -18,6 +81,7 @@ export function DossiersPage({ onSessionExpiree }: Props) {
   const refDialogueEtaitOuvert = useRef(false);
   const [dialogueOuvert, setDialogueOuvert] = useState(false);
   const dossiers = useApiGet<Note[]>("/v1/notes", onSessionExpiree);
+  const bureau = useBureau();
 
   const location = useLocation();
   const annonce = (location.state as { annonce?: string } | null)?.annonce ?? null;
@@ -124,13 +188,23 @@ export function DossiersPage({ onSessionExpiree }: Props) {
         {/* La liste est pilotée par la seule présence de données : une erreur
             (ou un rechargement) survenant alors que des dossiers sont déjà
             affichés ne les fait pas disparaître. */}
-        {liste.length > 0 && (
-          <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
-            {liste.map((note) => (
-              <CarteDossier key={note.id} note={note} />
-            ))}
-          </ul>
-        )}
+        {liste.length > 0 &&
+          (bureau ? (
+            <TableauTriable
+              titre="Tous les dossiers"
+              colonnes={colonnesDossiers()}
+              lignes={liste}
+              cleLigne={(note) => note.id}
+              vers={(note) => `/dossiers/${note.id}`}
+              etiquetteLigne={(note) => `Ouvrir le dossier ${note.libelle}`}
+            />
+          ) : (
+            <ul className="m-0 flex list-none flex-col gap-[10px] p-0">
+              {liste.map((note) => (
+                <CarteDossier key={note.id} note={note} />
+              ))}
+            </ul>
+          ))}
       </section>
 
       {dialogueOuvert && (

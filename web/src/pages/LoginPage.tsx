@@ -81,7 +81,7 @@ export function LoginPage({ onConnecte, focusTitre }: LoginPageProps) {
   return (
     <main className="flex min-h-svh w-full flex-col items-center justify-center px-5 py-8">
       <Card
-        className="w-full max-w-sm gap-6 rounded-[28px] border-0 bg-white px-6 py-8 shadow-[0_6px_18px_rgba(40,30,120,0.06)]"
+        className="carte-connexion w-full max-w-sm gap-6 rounded-[28px] border-0 bg-white px-6 py-8 shadow-[0_6px_18px_rgba(40,30,120,0.06)]"
         data-testid="carte-connexion"
       >
         <div className="flex flex-col items-center gap-4 text-center">

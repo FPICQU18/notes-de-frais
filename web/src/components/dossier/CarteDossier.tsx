@@ -1,15 +1,8 @@
 import { Link } from "react-router";
 
-import type { Note, StatutNote } from "../../api/client";
+import type { Note } from "../../api/client";
 import { formatMontant, formatNbDepenses, formatPeriode } from "../../lib/format";
-
-const LIBELLES_STATUT: Record<StatutNote, string> = {
-  brouillon: "Brouillon",
-  soumise: "Soumise",
-  validee: "Validée",
-  refusee: "Refusée",
-  remboursee: "Remboursée",
-};
+import { LIBELLES_STATUT } from "./statuts";
 
 type Props = {
   note: Note;

@@ -70,6 +70,7 @@ function pastilleRole(container: HTMLElement, libelle: string): HTMLElement {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.history.replaceState(null, "");
 });
 
 test.each([
@@ -106,6 +107,8 @@ test.each([
 
 test("bouton « Retour » présent en haut de la page Profil, au clic retour à la page précédente", async () => {
   const utilisateur = userEvent.setup();
+  // idx > 0 : une page précédente existe dans l'appli (cas navigate(-1)).
+  window.history.replaceState({ idx: 1 }, "");
   render(
     <MemoryRouter initialEntries={["/", "/profil"]} initialIndex={1}>
       <Routes>

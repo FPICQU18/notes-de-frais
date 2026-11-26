@@ -39,6 +39,17 @@ export function formatDateCourte(dateIso: string): string {
   }).format(new Date(Date.UTC(annee, mois - 1, jour)));
 }
 
+/** « 18 nov. 2026 » — date courte française avec l'année, sans décalage de fuseau. */
+export function formatDateAnnee(dateIso: string): string {
+  const [annee, mois, jour] = dateIso.split("-").map(Number);
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(Date.UTC(annee, mois - 1, jour)));
+}
+
 /** « 18 nov. » — date courte française d'un horodatage, au fuseau `Europe/Paris`. */
 export function formatDateCourteHorodatage(dateIso: string): string {
   return new Intl.DateTimeFormat("fr-FR", {

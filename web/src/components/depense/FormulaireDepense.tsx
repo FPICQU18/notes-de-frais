@@ -446,7 +446,7 @@ export function FormulaireDepense({
   }
 
   return (
-    <div className="min-h-[100svh] bg-[var(--card)]">
+    <div className="formulaire-depense min-h-[100svh] bg-[var(--card)]">
       <EnTeteDepense titre={titre} />
 
       {lectureSeule && !chargementStatut && (

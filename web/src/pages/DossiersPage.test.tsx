@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 
 import type { Note } from "../api/client";
@@ -409,4 +409,233 @@ test("le bouton « Annuler » ferme la boîte sans appel réseau", async () => {
 
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+/* ------------------------------------------------- US-044 (tableau bureau ≥ 1024 px) */
+
+type EcouteurMedia = (evenement: MediaQueryListEvent) => void;
+
+/**
+ * Mock de `window.matchMedia` piloté par la largeur : `definirLargeur(px)`
+ * met à jour `matches` et notifie les écouteurs, comme au redimensionnement
+ * (même patron que `ValidationPage.test.tsx`, US-043).
+ */
+function mockLargeur(largeurInitiale: number) {
+  let largeur = largeurInitiale;
+  const ecouteurs = new Set<EcouteurMedia>();
+  vi.stubGlobal("matchMedia", (requete: string) => {
+    const correspond = () =>
+      requete === "(min-width: 1024px)" ? largeur >= 1024 : false;
+    return {
+      get matches() {
+        return correspond();
+      },
+      media: requete,
+      addEventListener: (_: string, ecouteur: EcouteurMedia) => ecouteurs.add(ecouteur),
+      removeEventListener: (_: string, ecouteur: EcouteurMedia) => ecouteurs.delete(ecouteur),
+    } as unknown as MediaQueryList;
+  });
+  return {
+    definirLargeur(px: number) {
+      largeur = px;
+      const evenement = {
+        matches: px >= 1024,
+        media: "(min-width: 1024px)",
+      } as MediaQueryListEvent;
+      for (const ecouteur of ecouteurs) ecouteur(evenement);
+    },
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function renderPageBureau(options: { onSessionExpiree?: () => void; largeur?: number } = {}) {
+  mockLargeur(options.largeur ?? 1024);
+  return renderPage(options);
+}
+
+/** Libellés des lignes du tableau, dans l'ordre (via l'aria-label du lien de ligne). */
+function libellesDesLignes(): string[] {
+  return screen
+    .getAllByRole("row")
+    .slice(1)
+    .map((ligne) =>
+      (within(ligne).getByRole("link").getAttribute("aria-label") ?? "").replace(
+        "Ouvrir le dossier ",
+        "",
+      ),
+    );
+}
+
+describe("US-044 — tableau triable ≥ 1024 px", () => {
+  test("1023 px : les cartes restent affichées, aucun tableau", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([note({ id: 1, libelle: "Déplacement" })]),
+    );
+
+    renderPageBureau({ largeur: 1023 });
+
+    const cartes = await screen.findAllByRole("listitem");
+    expect(cartes).toHaveLength(1);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Déplacement/ })).toHaveAttribute("href", "/dossiers/1");
+  });
+
+  test("1024 px : tableau avec les 5 colonnes date, libellé, catégorie, montant, statut", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([
+        note({ id: 1, libelle: "Mission Lyon", statut: "soumise", total_centimes: 28000 }),
+        note({ id: 2, libelle: "Fournitures", statut: "brouillon", total_centimes: 12550 }),
+      ]),
+    );
+
+    renderPageBureau();
+
+    const tableau = await screen.findByRole("table", { name: "Tous les dossiers" });
+    expect(tableau).toBeInTheDocument();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    for (const colonne of ["Date", "Libellé", "Catégorie", "Montant", "Statut"]) {
+      expect(
+        within(screen.getAllByRole("row")[0]).getByRole("columnheader", {
+          name: new RegExp(`^${colonne}`),
+        }),
+      ).toBeInTheDocument();
+    }
+    // Pastille de statut existante dans la colonne Statut + montant formaté.
+    expect(screen.getByText("Soumise")).toBeInTheDocument();
+    expect(screen.getByText(/280,00/)).toBeInTheDocument();
+    // Le bouton « Nouveau dossier » reste présent.
+    expect(screen.getByRole("button", { name: "Nouveau dossier" })).toBeInTheDocument();
+  });
+
+  test("1024 px : tri par défaut = ordre du serveur ; clic « Date » → ascendant puis descendant (aria-sort)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([
+        note({ id: 1, libelle: "Récent", derniere_depense_le: "2026-11-26" }),
+        note({ id: 2, libelle: "Ancien", derniere_depense_le: "2026-11-10" }),
+        note({ id: 3, libelle: "Milieu", derniere_depense_le: "2026-11-18" }),
+      ]),
+    );
+    const utilisateur = userEvent.setup();
+
+    renderPageBureau();
+
+    // Ordre serveur conservé par défaut, aucun aria-sort.
+    await screen.findByRole("table");
+    expect(libellesDesLignes()).toEqual(["Récent", "Ancien", "Milieu"]);
+    const enteteDate = screen.getByRole("columnheader", { name: /Date/ });
+    expect(enteteDate).not.toHaveAttribute("aria-sort");
+
+    const boutonDate = within(enteteDate).getByRole("button", { name: /Date/ });
+    await utilisateur.click(boutonDate);
+    expect(enteteDate).toHaveAttribute("aria-sort", "ascending");
+    expect(libellesDesLignes()).toEqual(["Ancien", "Milieu", "Récent"]);
+
+    await utilisateur.click(boutonDate);
+    expect(enteteDate).toHaveAttribute("aria-sort", "descending");
+    expect(libellesDesLignes()).toEqual(["Récent", "Milieu", "Ancien"]);
+  });
+
+  test("1024 px : clic sur « Montant » trie par montant croissant puis décroissant", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([
+        note({ id: 1, libelle: "Gros", total_centimes: 90000 }),
+        note({ id: 2, libelle: "Petit", total_centimes: 500 }),
+        note({ id: 3, libelle: "Moyen", total_centimes: 12300 }),
+      ]),
+    );
+    const utilisateur = userEvent.setup();
+
+    renderPageBureau();
+
+    const enteteMontant = await screen.findByRole("columnheader", { name: /Montant/ });
+    const boutonMontant = within(enteteMontant).getByRole("button", { name: /Montant/ });
+
+    await utilisateur.click(boutonMontant);
+    expect(enteteMontant).toHaveAttribute("aria-sort", "ascending");
+    expect(libellesDesLignes()).toEqual(["Petit", "Moyen", "Gros"]);
+
+    await utilisateur.click(boutonMontant);
+    expect(enteteMontant).toHaveAttribute("aria-sort", "descending");
+    expect(libellesDesLignes()).toEqual(["Gros", "Moyen", "Petit"]);
+  });
+
+  test("1024 px : clic sur une ligne du tableau navigue vers /dossiers/:id", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([note({ id: 42, libelle: "Mission Lyon" })]),
+    );
+    const utilisateur = userEvent.setup();
+
+    mockLargeur(1024);
+    render(
+      <MemoryRouter initialEntries={["/dossiers"]}>
+        <Routes>
+          <Route path="/dossiers" element={<DossiersPage onSessionExpiree={vi.fn()} />} />
+          <Route path="/dossiers/:id" element={<div>DÉTAIL DOSSIER</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const lien = await screen.findByRole("link", { name: "Ouvrir le dossier Mission Lyon" });
+    expect(lien).toHaveAttribute("href", "/dossiers/42");
+    await utilisateur.click(lien);
+    expect(await screen.findByText("DÉTAIL DOSSIER")).toBeInTheDocument();
+  });
+
+  test("1024 px : état vide conservé (texte + bouton « Nouveau dossier »), pas de tableau", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
+
+    renderPageBureau();
+
+    expect(
+      await screen.findByText(
+        "Aucun dossier. Regroupez vos dépenses pour les envoyer en validation.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nouveau dossier" })).toBeInTheDocument();
+  });
+
+  test("1024 px : erreur de chargement conservée (alerte + « Réessayer »), pas de tableau", async () => {
+    let appels = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      appels += 1;
+      if (appels === 1) throw new Error("réseau");
+      return jsonResponse([note({ id: 1, libelle: "Déplacement" })]);
+    });
+    const utilisateur = userEvent.setup();
+
+    renderPageBureau();
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    await utilisateur.click(screen.getByRole("button", { name: "Réessayer" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("table", { name: "Tous les dossiers" })).toBeInTheDocument();
+  });
+
+  test("1024 px : chargement conserve aria-busy sur la section", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => {}));
+
+    renderPageBureau();
+
+    const region = screen.getByRole("region", { name: "Dossiers" });
+    expect(region).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Chargement…")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  test("1024 px : 401 au chargement → onSessionExpiree", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ detail: "Session expirée." }, 401),
+    );
+    const onSessionExpiree = vi.fn();
+
+    renderPageBureau({ onSessionExpiree });
+
+    await waitFor(() => expect(onSessionExpiree).toHaveBeenCalled());
+  });
 });

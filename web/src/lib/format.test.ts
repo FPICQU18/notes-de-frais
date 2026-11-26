@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   dateDuJour,
   dateIsoParis,
+  formatDateAnnee,
   formatDateCourte,
   formatDateCourteHorodatage,
   formatDateHeure,
@@ -29,6 +30,16 @@ describe("formatDateCourte", () => {
 
   test("ne conserve pas de zéro initial sur le jour", () => {
     expect(formatDateCourte("2026-11-05")).toBe("5 nov.");
+  });
+});
+
+describe("formatDateAnnee", () => {
+  test("renvoie « 18 nov. 2026 » avec l'année", () => {
+    expect(formatDateAnnee("2026-11-18")).toBe("18 nov. 2026");
+  });
+
+  test("ne conserve pas de zéro initial sur le jour", () => {
+    expect(formatDateAnnee("2026-11-05")).toBe("5 nov. 2026");
   });
 });
 
